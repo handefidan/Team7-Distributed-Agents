@@ -1,0 +1,38 @@
+[
+  {
+    "agent_id": "agent-gpt-x",
+    "name": "Backend & Core Logic Agent",
+    "model": "GPT-X",
+    "endpoint": "http://localhost:8001/execute",
+    "capabilities": {
+      "coding": 90,
+      "reasoning": 85,
+      "context": 95
+    },
+    "status": "idle"
+  },
+  {
+    "agent_id": "agent-model-y",
+    "name": "Architecture & Analysis Agent",
+    "model": "Model-Y",
+    "endpoint": "http://localhost:8002/execute",
+    "capabilities": {
+      "coding": 75,
+      "reasoning": 95,
+      "context": 70
+    },
+    "status": "idle"
+  },
+  {
+    "agent_id": "agent-model-z",
+    "name": "Frontend & UI Agent",
+    "model": "Model-Z",
+    "endpoint": "http://localhost:8003/execute",
+    "capabilities": {
+      "coding": 95,
+      "reasoning": 70,
+      "context": 80
+    },
+    "status": "idle"
+  }
+]
