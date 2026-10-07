@@ -5,17 +5,17 @@ The **Distributed Autonomous Multi-Agent Software Development Platform** orchest
 * **Master Agent (`:8000`):** Manages dynamic agent registrations, accepts task specifications, dispatches tasks over HTTP, measures round-trip latency (`round_trip_ms`), and audits records.
 * **Worker Agents (`:8001+`):** Domain-specific agents running specialized local LLMs (via Ollama), acknowledging incoming tasks synchronously, and executing inference asynchronously in the background.
 
-### Team 7 Contributors
-| Full Name | Student ID |
-| :--- | :---: |
-| **Hande Reyyan Fidan** | 2304010611 |
-| **Berat Ermiş** | 2304010804 |
-| **Eyad Ahmed Mahmoud Zaidan** | 2404010370 |
-| **Mehin Baghirzade** | 2304010848 |
-| **Nehir Tunç** | 2304010608 |
-| **Mert Durdu** | 2304010805 |
+### Team 7 Contributors & Responsibilities
+| Full Name | Student ID | Sprint 1 Focus |
+| :--- | :---: | :--- |
+| **Hande Reyyan Fidan** | 2304010611 | Backlog, DoD, SRS Architecture, Sprint 1 Demo & Review |
+| **Berat Ermiş** | 2304010804 | Master-Agent Prototype, Task Decomposition, Agent/Model Registry |
+| **Eyad Ahmed Mahmoud Zaidan** | 2404010370 | Web Interface Frontend & Agent Registration Integration |
+| **Mehin Baghirzade** | 2304010848 | Web Interface Development & Client Integration |
+| **Nehir Tunç** | 2304010608 | Task Decomposition, System Architecture Diagram & Repo Setup |
+| **Mert Durdu** | 2304010805 | Requirements Finalization & Quality Assurance |
 
-*Note: The team syncs every Monday to review sprint deliverables and technical alignment.*
+*Note: The team syncs every Monday to review sprint deliverables, Trello tasks, and technical alignment.*
 
 ---
 
