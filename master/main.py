@@ -1,6 +1,9 @@
 """Master agent API: register agents and send tasks to a chosen agent.
 
-Run:  uvicorn master.main:app --port 8000
+Binds to this machine's Tailscale IP (via `tailscale ip -4`, or the
+TAILSCALE_IP env var) so the API is only reachable over the tailnet.
+
+Run:  python -m master.main
 """
 
 import os
@@ -10,8 +13,10 @@ from uuid import UUID
 
 import httpx
 from fastapi import FastAPI, HTTPException, status
-from pydantic import ValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field, ValidationError
 
+from master.decompose import DecomposeResponse, decompose_requirement
 from shared.schemas import (
     AckStatus,
     AgentRegistration,
@@ -23,10 +28,17 @@ from shared.schemas import (
 )
 
 AGENT_TIMEOUT_SECONDS = float(os.getenv("AGENT_TIMEOUT_SECONDS", "5"))
+OLLAMA_BASE_URL = os.getenv("MASTER_OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("MASTER_OLLAMA_MODEL", "llama3")
+OLLAMA_TIMEOUT_SECONDS = float(os.getenv("MASTER_OLLAMA_TIMEOUT_SECONDS", "120"))
 
 
-def create_app(transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
-    """`transport` lets tests route agent calls in-process instead of over the network."""
+def create_app(
+    transport: httpx.AsyncBaseTransport | None = None,
+    ollama_transport: httpx.AsyncBaseTransport | None = None,
+) -> FastAPI:
+    """`transport` lets tests route agent calls in-process; `ollama_transport`
+    does the same for the local Ollama call used to decompose requirements."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -35,9 +47,28 @@ def create_app(transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
             yield
 
     app = FastAPI(title="Master Agent", version="0.2.0", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     # In-memory for Sprint 2; replace with the Sprint 1 agent registry / a database later.
     agents: dict[str, AgentRegistration] = {}
     dispatches: dict[UUID, DispatchRecord] = {}
+    ollama_client = httpx.AsyncClient(
+        base_url=OLLAMA_BASE_URL, transport=ollama_transport, timeout=OLLAMA_TIMEOUT_SECONDS
+    )
+
+    class RequirementPayload(BaseModel):
+        requirement_text: str = Field(min_length=1)
+
+    @app.post("/api/v1/requirements/decompose", response_model=DecomposeResponse)
+    async def decompose(payload: RequirementPayload) -> DecomposeResponse:
+        text = payload.requirement_text.strip()
+        if not text:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "requirement_text cannot be empty")
+        return await decompose_requirement(text, ollama_client, OLLAMA_MODEL)
 
     @app.post("/api/v1/agents", response_model=AgentRegistration, status_code=status.HTTP_201_CREATED)
     def register_agent(agent: AgentRegistration) -> AgentRegistration:
@@ -104,3 +135,11 @@ def create_app(transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
 
 
 app = create_app()
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    from shared.network import get_tailscale_ip
+
+    uvicorn.run(app, host=get_tailscale_ip(), port=int(os.getenv("MASTER_PORT", "8000")))

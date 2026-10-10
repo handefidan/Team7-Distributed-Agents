@@ -5,9 +5,12 @@ The ack contract (Sprint 2) is unaffected by execution: the agent answers
 immediately and runs the task afterwards. Execution status is a preview of
 Sprint 3, fetched separately via GET /agent/v1/tasks/{task_id}/result.
 
+Binds to this machine's Tailscale IP (via `tailscale ip -4`, or the
+TAILSCALE_IP env var) so the API is only reachable over the tailnet.
+
 Run:
   ollama serve &
-  AGENT_ID=agent-a AGENT_MODEL=llama3 uvicorn agent.main:app --port 8001
+  AGENT_ID=agent-a AGENT_MODEL=llama3 python -m agent.main
 """
 
 import os
@@ -155,3 +158,11 @@ def create_app(settings: AgentSettings | None = None, ollama_transport: httpx.As
 
 
 app = create_app()
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    from shared.network import get_tailscale_ip
+
+    uvicorn.run(app, host=get_tailscale_ip(), port=int(os.getenv("AGENT_PORT", "8001")))
