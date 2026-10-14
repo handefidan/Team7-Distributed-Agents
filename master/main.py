@@ -29,7 +29,7 @@ from shared.schemas import (
 
 AGENT_TIMEOUT_SECONDS = float(os.getenv("AGENT_TIMEOUT_SECONDS", "5"))
 OLLAMA_BASE_URL = os.getenv("MASTER_OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("MASTER_OLLAMA_MODEL", "llama3")
+OLLAMA_MODEL = os.getenv("MASTER_OLLAMA_MODEL", "llama3.2")
 OLLAMA_TIMEOUT_SECONDS = float(os.getenv("MASTER_OLLAMA_TIMEOUT_SECONDS", "120"))
 
 

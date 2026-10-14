@@ -82,6 +82,17 @@ model name doesn't match `AGENT_MODEL` — execution then fails in the
 background and `GET /agent/v1/tasks/{task_id}/result` reports `status:
 "failed"` with the reason.
 
+## Supported & Example Models
+
+The `backend/agents.json` file contains example agent configurations. In our distributed architecture, we plan to utilize the following real AI models based on their specific strengths:
+
+1. **Gemini Flash (API):** Master agent and requirements analysis (highest context capacity).
+2. **Qwen2.5-Coder (Ollama):** Frontend and backend code generation.
+3. **DeepSeek-R1 (Ollama):** Reasoning, task decomposition, and planning.
+4. **Llama 3.1 / 3.2 (Ollama / Groq):** Fast testing and code review agents.
+5. **OpenRouter / Alternative Models:** Fallback and alternative family options.
+6. **Phi-3/4 mini (Ollama):** Lightweight tasks and documentation for lower-spec machines.
+
 ## Try it
 
 To try everything on one computer without Tailscale, pin the bind address
