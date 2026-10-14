@@ -3,7 +3,13 @@
 Master agent can send a task to a chosen worker agent and receive an
 acknowledgement. API contract: [docs/api/task-dispatch-contract.md](docs/api/task-dispatch-contract.md).
 
+Architecture overview: [docs/architecture.md](docs/architecture.md)
+
+Trello board: <https://trello.com/b/Zc1eozhQ>
+
 ```
+backend/              Sprint 1 web page API (port 8000)
+frontend/index.html   Sprint 1 web page (open in browser)
 shared/schemas.py     message formats (the contract in code)
 master/decompose.py   requirement -> subtasks (Sprint 1)
 master/main.py        master API  (port 8000)
@@ -18,6 +24,28 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## Sprint 1: web page
+
+The web page (`frontend/index.html`) talks to the `backend/` service on
+`http://localhost:8000`, not to the `master/` service described below.
+
+```bash
+uvicorn backend.main:app --port 8000
+# then open frontend/index.html in your browser
+```
+
+From the page you can register and remove agents (name, model, and
+coding/reasoning/context scores) and decompose a requirement into tasks.
+The backend exposes `GET/POST /api/agents`, `DELETE /api/agents/{name}`,
+`POST /api/decompose` and `GET /api/health`. If Ollama is not running,
+`/api/decompose` returns a fixed 5-task fallback result instead of failing.
+
+> **Note:** `backend/` and `master/` both default to port 8000. To run them
+> together, start the master on another port, e.g.
+> `MASTER_PORT=8010 python -m master.main`. They also use different agent
+> formats (`/api/agents` in `backend/`, `/api/v1/agents` in `master/`).
+> Merging them is planned for Sprint 3, see `docs/architecture.md`.
 
 ## Run
 
@@ -55,6 +83,16 @@ background and `GET /agent/v1/tasks/{task_id}/result` reports `status:
 "failed"` with the reason.
 
 ## Try it
+
+To try everything on one computer without Tailscale, pin the bind address
+to localhost in each terminal before starting the master or the agent:
+
+```bash
+export TAILSCALE_IP=127.0.0.1
+```
+
+The `localhost` examples below only work this way (or from a machine that
+uses the master's Tailscale IP instead of `localhost`).
 
 ### Decompose a requirement (Sprint 1)
 
