@@ -1,6 +1,7 @@
 [
   {
     "agent_id": "master-gemini",
+    "name": "Gemini Master",
     "model": "gemini-1.5-flash",
     "provider": "api",
     "description": "Master agent responsible for requirements analysis. Highest context window capacity.",
@@ -12,6 +13,7 @@
   },
   {
     "agent_id": "coder-qwen",
+    "name": "Qwen Coder",
     "model": "qwen2.5-coder:7b",
     "provider": "ollama",
     "description": "Specialized agent for frontend and backend code generation.",
@@ -23,6 +25,7 @@
   },
   {
     "agent_id": "reasoning-deepseek",
+    "name": "DeepSeek Reasoner",
     "model": "deepseek-r1:8b",
     "provider": "ollama",
     "description": "Specialized agent for task decomposition, complex logic, and strategic planning.",
@@ -34,6 +37,7 @@
   },
   {
     "agent_id": "reviewer-llama",
+    "name": "Llama Reviewer",
     "model": "llama3.1:8b",
     "provider": "groq",
     "description": "Fast evaluation agent for test case generation and code review.",
@@ -45,6 +49,7 @@
   },
   {
     "agent_id": "backup-openrouter",
+    "name": "OpenRouter Fallback",
     "model": "minimax/minimax-01",
     "provider": "openrouter",
     "description": "Free fallback/backup agent from an alternative model family routed via OpenRouter.",
@@ -56,6 +61,7 @@
   },
   {
     "agent_id": "lightweight-phi",
+    "name": "Phi Lightweight",
     "model": "phi3:mini",
     "provider": "ollama",
     "description": "Lightweight agent tailored for low-resource environments, documentation tasks, and simple operations.",
