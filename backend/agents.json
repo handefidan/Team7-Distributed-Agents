@@ -1,38 +1,68 @@
 [
   {
-    "agent_id": "agent-gpt-x",
-    "name": "Backend & Core Logic Agent",
-    "model": "GPT-X",
-    "endpoint": "http://localhost:8001/execute",
+    "agent_id": "master-gemini",
+    "model": "gemini-1.5-flash",
+    "provider": "api",
+    "description": "Master agent responsible for requirements analysis. Highest context window capacity.",
     "capabilities": {
-      "coding": 90,
-      "reasoning": 85,
-      "context": 95
-    },
-    "status": "idle"
+      "coding": 85,
+      "reasoning": 92,
+      "context": 100
+    }
   },
   {
-    "agent_id": "agent-model-y",
-    "name": "Architecture & Analysis Agent",
-    "model": "Model-Y",
-    "endpoint": "http://localhost:8002/execute",
-    "capabilities": {
-      "coding": 75,
-      "reasoning": 95,
-      "context": 70
-    },
-    "status": "idle"
-  },
-  {
-    "agent_id": "agent-model-z",
-    "name": "Frontend & UI Agent",
-    "model": "Model-Z",
-    "endpoint": "http://localhost:8003/execute",
+    "agent_id": "coder-qwen",
+    "model": "qwen2.5-coder:7b",
+    "provider": "ollama",
+    "description": "Specialized agent for frontend and backend code generation.",
     "capabilities": {
       "coding": 95,
-      "reasoning": 70,
+      "reasoning": 80,
       "context": 80
-    },
-    "status": "idle"
+    }
+  },
+  {
+    "agent_id": "reasoning-deepseek",
+    "model": "deepseek-r1:8b",
+    "provider": "ollama",
+    "description": "Specialized agent for task decomposition, complex logic, and strategic planning.",
+    "capabilities": {
+      "coding": 75,
+      "reasoning": 98,
+      "context": 85
+    }
+  },
+  {
+    "agent_id": "reviewer-llama",
+    "model": "llama3.1:8b",
+    "provider": "groq",
+    "description": "Fast evaluation agent for test case generation and code review.",
+    "capabilities": {
+      "coding": 85,
+      "reasoning": 82,
+      "context": 75
+    }
+  },
+  {
+    "agent_id": "backup-openrouter",
+    "model": "minimax/minimax-01",
+    "provider": "openrouter",
+    "description": "Free fallback/backup agent from an alternative model family routed via OpenRouter.",
+    "capabilities": {
+      "coding": 75,
+      "reasoning": 75,
+      "context": 90
+    }
+  },
+  {
+    "agent_id": "lightweight-phi",
+    "model": "phi3:mini",
+    "provider": "ollama",
+    "description": "Lightweight agent tailored for low-resource environments, documentation tasks, and simple operations.",
+    "capabilities": {
+      "coding": 60,
+      "reasoning": 65,
+      "context": 70
+    }
   }
 ]
