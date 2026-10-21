@@ -33,6 +33,14 @@ class TaskPriority(StrEnum):
     HIGH = "high"
 
 
+class CapabilityScores(BaseModel):
+    """0-100 self-reported scores used by the agent selection algorithm."""
+
+    coding: int = Field(default=50, ge=0, le=100)
+    reasoning: int = Field(default=50, ge=0, le=100)
+    context: int = Field(default=50, ge=0, le=100)
+
+
 class TaskSpec(BaseModel):
     """What a caller asks the master to send to an agent."""
 
@@ -50,6 +58,10 @@ class TaskSpec(BaseModel):
     )
     depends_on: list[UUID] = Field(default_factory=list)
     deadline: datetime | None = None
+    required_capabilities: CapabilityScores = Field(
+        default_factory=CapabilityScores,
+        description="Minimum scores an agent must have to be selected (see CapabilityScores).",
+    )
 
 
 class TaskMessage(TaskSpec):
@@ -82,6 +94,10 @@ class AgentRegistration(BaseModel):
     agent_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     base_url: HttpUrl
     model: str = Field(min_length=1)
+    capabilities: CapabilityScores = Field(
+        default_factory=CapabilityScores,
+        description="What this agent is good at (0-100 each); defaults to an average agent.",
+    )
 
 
 class DispatchStatus(StrEnum):

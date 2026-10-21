@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 
 from master.decompose import DecomposeResponse, decompose_requirement
+from master.selection import select_agent
 from shared.schemas import (
     AckStatus,
     AgentRegistration,
@@ -79,13 +80,8 @@ def create_app(
     def list_agents() -> list[AgentRegistration]:
         return list(agents.values())
 
-    @app.post("/api/v1/agents/{agent_id}/tasks", response_model=DispatchRecord)
-    async def send_task(agent_id: str, spec: TaskSpec) -> DispatchRecord:
-        agent = agents.get(agent_id)
-        if agent is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, f"agent '{agent_id}' is not registered")
-
-        message = TaskMessage(**spec.model_dump(), agent_id=agent_id)
+    async def dispatch_to_agent(agent: AgentRegistration, spec: TaskSpec) -> DispatchRecord:
+        message = TaskMessage(**spec.model_dump(), agent_id=agent.agent_id)
         url = f"{str(agent.base_url).rstrip('/')}/agent/v1/tasks"
         started = time.perf_counter()
 
@@ -119,6 +115,24 @@ def create_app(
         )
         dispatches[message.task_id] = record
         return record
+
+    @app.post("/api/v1/agents/{agent_id}/tasks", response_model=DispatchRecord)
+    async def send_task(agent_id: str, spec: TaskSpec) -> DispatchRecord:
+        agent = agents.get(agent_id)
+        if agent is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"agent '{agent_id}' is not registered")
+        return await dispatch_to_agent(agent, spec)
+
+    @app.post("/api/v1/tasks/dispatch", response_model=DispatchRecord)
+    async def dispatch_task(spec: TaskSpec) -> DispatchRecord:
+        """Pick the best-suited registered agent via the selection algorithm
+        (master/selection.py) and send the task to it."""
+        agent = select_agent(list(agents.values()), spec)
+        if agent is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, "no registered agent meets the task's required_capabilities"
+            )
+        return await dispatch_to_agent(agent, spec)
 
     @app.get("/api/v1/tasks", response_model=list[DispatchRecord])
     def list_tasks() -> list[DispatchRecord]:

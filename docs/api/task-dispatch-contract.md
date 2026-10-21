@@ -1,10 +1,15 @@
 # Task Dispatch API Contract (v1.0)
 
 Sprint 2 · Owner: Berat Ermiş
+Reviewed and approved for Sprint 2 Week 3-4: still accurate as written below.
+Week 4 adds `POST /api/v1/tasks/dispatch`, where the master itself picks the
+agent (see "Agent selection" below) — the original
+`POST /api/v1/agents/{agent_id}/tasks` is unchanged and still available for
+sending to an explicitly chosen agent.
 
 How the master agent sends a task to a chosen worker agent and how the agent
-acknowledges it. Choosing *which* agent gets a task (agent selection algorithm)
-is out of scope; this contract starts once the master has picked an agent.
+acknowledges it. This contract starts once an agent — chosen by the caller or
+by the master's own selection algorithm — has been picked.
 
 The Pydantic models in [`shared/schemas.py`](../../shared/schemas.py) are the
 source of truth. Live OpenAPI docs: `http://<master>:8000/docs` and
@@ -71,11 +76,41 @@ Returns `agent_id`, `model`, `status` (`idle`/`busy`), `queue_size`,
 
 | Method & path | Purpose |
 |---|---|
-| `POST /api/v1/agents` | Register an agent (`agent_id`, `base_url`, `model`) — temporary in-memory registry |
+| `POST /api/v1/agents` | Register an agent (`agent_id`, `base_url`, `model`, `capabilities`) — temporary in-memory registry |
 | `GET /api/v1/agents` | List registered agents |
-| `POST /api/v1/agents/{agent_id}/tasks` | **Send a task** to the chosen agent and wait for its acknowledgement |
+| `POST /api/v1/agents/{agent_id}/tasks` | Send a task to the **named** agent and wait for its acknowledgement |
+| `POST /api/v1/tasks/dispatch` | Send a task to the agent **the selection algorithm picks** and wait for its acknowledgement |
 | `GET /api/v1/tasks` | List all dispatch records |
 | `GET /api/v1/tasks/{task_id}` | Get one dispatch record |
+
+### Agent capability scores
+
+Registration (`POST /api/v1/agents`) now takes an optional `capabilities`
+object — `CapabilityScores` in `shared/schemas.py`:
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `coding` | int (0–100) | 50 | |
+| `reasoning` | int (0–100) | 50 | |
+| `context` | int (0–100) | 50 | |
+
+Omitting `capabilities` registers an "average" agent (50/50/50), so existing
+callers that don't set it keep working.
+
+### Agent selection
+
+`TaskSpec` (used by both send endpoints) takes an optional
+`required_capabilities` object, same shape as `CapabilityScores`, defaulting
+to 50/50/50. `POST /api/v1/tasks/dispatch` (`master/selection.py`):
+
+1. Keeps only registered agents whose `capabilities` meet or exceed every
+   field of the task's `required_capabilities`.
+2. Among those, picks the one with the highest total score (`coding +
+   reasoning + context`); ties break on `agent_id` for a deterministic pick.
+3. Returns `404` if no registered agent qualifies.
+
+Once an agent is picked, dispatch proceeds exactly as `POST
+/api/v1/agents/{agent_id}/tasks` below.
 
 ### `POST /api/v1/agents/{agent_id}/tasks`
 

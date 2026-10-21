@@ -127,12 +127,27 @@ instead of failing — so it still works offline and in CI.
 
 ### Dispatch a task to an agent (Sprint 2)
 
+Register agents with their capability scores (`coding`/`reasoning`/`context`,
+0-100 each; omit for an average 50/50/50 agent):
+
 ```bash
 curl -X POST localhost:8000/api/v1/agents -H 'content-type: application/json' \
-  -d '{"agent_id":"agent-a","base_url":"http://localhost:8001","model":"llama3"}'
+  -d '{"agent_id":"agent-a","base_url":"http://localhost:8001","model":"llama3","capabilities":{"coding":90,"reasoning":70,"context":80}}'
+```
 
+Send to a specific agent by id:
+
+```bash
 curl -X POST localhost:8000/api/v1/agents/agent-a/tasks -H 'content-type: application/json' \
   -d '{"type":"backend","title":"Book CRUD API","description":"Create REST endpoints for books."}'
+```
+
+Or let the master pick the best-suited registered agent itself, based on
+`required_capabilities` (also 0-100 each, defaults to 50/50/50):
+
+```bash
+curl -X POST localhost:8000/api/v1/tasks/dispatch -H 'content-type: application/json' \
+  -d '{"type":"backend","title":"Book CRUD API","description":"Create REST endpoints for books.","required_capabilities":{"coding":80,"reasoning":0,"context":0}}'
 ```
 
 The response's `task.task_id` lets you poll the agent directly for the
