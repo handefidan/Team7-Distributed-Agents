@@ -1,73 +1,61 @@
 [
   {
-    "agent_id": "master-gemini",
-    "name": "Gemini Master",
-    "model": "gemini-1.5-flash",
-    "provider": "api",
-    "description": "Master agent responsible for requirements analysis. Highest context window capacity.",
+    "agent_id": "qwen-coder-small",
+    "name": "Qwen Coder 1.5B",
+    "model": "qwen2.5-coder:1.5b",
+    "provider": "ollama",
+    "description": "Lightweight code agent specialized for backend APIs, test generation, and task decomposition.",
     "capabilities": {
       "coding": 85,
-      "reasoning": 92,
-      "context": 100
-    }
-  },
-  {
-    "agent_id": "coder-qwen",
-    "name": "Qwen Coder",
-    "model": "qwen2.5-coder:7b",
-    "provider": "ollama",
-    "description": "Specialized agent for frontend and backend code generation.",
-    "capabilities": {
-      "coding": 95,
-      "reasoning": 80,
+      "reasoning": 78,
       "context": 80
     }
   },
   {
-    "agent_id": "reasoning-deepseek",
-    "name": "DeepSeek Reasoner",
-    "model": "deepseek-r1:8b",
+    "agent_id": "qwen-coder-large",
+    "name": "Qwen Coder 7B",
+    "model": "qwen2.5-coder:7b",
     "provider": "ollama",
-    "description": "Specialized agent for task decomposition, complex logic, and strategic planning.",
+    "description": "Specialized code agent for complex backend operations and database schema migrations.",
     "capabilities": {
-      "coding": 75,
-      "reasoning": 98,
-      "context": 85
-    }
-  },
-  {
-    "agent_id": "reviewer-llama",
-    "name": "Llama Reviewer",
-    "model": "llama3.1:8b",
-    "provider": "groq",
-    "description": "Fast evaluation agent for test case generation and code review.",
-    "capabilities": {
-      "coding": 85,
-      "reasoning": 82,
-      "context": 75
-    }
-  },
-  {
-    "agent_id": "backup-openrouter",
-    "name": "OpenRouter Fallback",
-    "model": "minimax/minimax-01",
-    "provider": "openrouter",
-    "description": "Free fallback/backup agent from an alternative model family routed via OpenRouter.",
-    "capabilities": {
-      "coding": 75,
-      "reasoning": 75,
+      "coding": 94,
+      "reasoning": 88,
       "context": 90
     }
   },
   {
-    "agent_id": "lightweight-phi",
-    "name": "Phi Lightweight",
-    "model": "phi3:mini",
+    "agent_id": "llama-general",
+    "name": "Llama 3.2 3B",
+    "model": "llama3.2:3b",
     "provider": "ollama",
-    "description": "Lightweight agent tailored for low-resource environments, documentation tasks, and simple operations.",
+    "description": "General purpose agent tailored for architecture analysis and requirements documentation.",
     "capabilities": {
-      "coding": 60,
-      "reasoning": 65,
+      "coding": 72,
+      "reasoning": 82,
+      "context": 85
+    }
+  },
+  {
+    "agent_id": "llama-reasoning",
+    "name": "Llama 3 8B",
+    "model": "llama3:8b",
+    "provider": "ollama",
+    "description": "Reasoning and general agent optimized for system architecture and deep task decomposition.",
+    "capabilities": {
+      "coding": 78,
+      "reasoning": 86,
+      "context": 85
+    }
+  },
+  {
+    "agent_id": "codellama-ui",
+    "name": "CodeLlama 7B",
+    "model": "codellama:7b",
+    "provider": "ollama",
+    "description": "Code generation agent dedicated to frontend UI components, modals, and unit tests.",
+    "capabilities": {
+      "coding": 88,
+      "reasoning": 75,
       "context": 70
     }
   }
