@@ -1,174 +1,154 @@
-# Distributed Agents — Task Dispatch (Sprint 2)
+# Team 7 — Distributed Autonomous LLM Multi-Agent System
 
-Master agent can send a task to a chosen worker agent and receive an
-acknowledgement. API contract: [docs/api/task-dispatch-contract.md](docs/api/task-dispatch-contract.md).
+A distributed multi-agent system where a central Master Agent decomposes software requirements into typed subtasks, dynamically evaluates candidate worker nodes via capability benchmarking, dispatches tasks over a secure private network (Tailscale), and receives non-blocking acknowledgements while workers execute prompts locally via Ollama.
 
-Architecture overview: [docs/architecture.md](docs/architecture.md)
-
-Trello board: <https://trello.com/b/Zc1eozhQ>
+- **API Contract Specification:** [`docs/api/task-dispatch-contract.md`](docs/api/task-dispatch-contract.md)
+- **Model Evaluation Criteria:** [`docs/model-evaluation-criteria.md`](docs/model-evaluation-criteria.md)
+- **Architecture Overview:** [`docs/architecture.md`](docs/architecture.md)
+- **Sprint Reports:** [`Sprint 1`](docs/Team7_Sprint1_Report.docx) · [`Sprint 2`](docs/Team7_Sprint2_Report.docx)
+- **Trello Board:** <https://trello.com/b/Zc1eozhQ>
 
 ```
-backend/              Sprint 1 web page API (port 8000)
-frontend/index.html   Sprint 1 web page (open in browser)
-shared/schemas.py     message formats (the contract in code)
-master/decompose.py   requirement -> subtasks (Sprint 1)
-master/main.py        master API  (port 8000)
-agent/main.py         worker agent API (port 8001+), one per computer
-tests/                pytest suite
+backend/                      Sprint 1 web page API (port 8000)
+frontend/index.html          Sprint 1 web interface (browser UI)
+shared/schemas.py            API Contract v1.0 (Pydantic models & validation)
+shared/network.py            Tailscale IP binding & fail-safe interface isolation
+master/decompose.py          Requirement -> subtasks breakdown (Sprint 1)
+master/selection.py          Deterministic capability-based agent selection algorithm (Sprint 2)
+master/main.py               Master Agent API gateway (port 8000)
+agent/main.py                Worker Agent execution API & Ollama engine (port 8001+)
+tests/                       Pytest suite (21 unit and integration tests)
+docs/                        Architecture diagrams, specifications, and sprint reports
 ```
 
-## Setup
+## Setup & Environment
 
 ```bash
+# 1. Create and activate virtual environment
 python -m venv .venv
+
+# On Linux/macOS:
 source .venv/bin/activate
+# On Windows (PowerShell):
+.\.venv\Scripts\Activate.ps1
+
+# 2. Install dependencies
 pip install -r requirements.txt
 ```
 
-## Sprint 1: web page
+---
 
-The web page (`frontend/index.html`) talks to the `backend/` service on
-`http://localhost:8000`, not to the `master/` service described below.
+## API Endpoints Matrix
 
+All Master and Worker endpoints bind strictly to the private Tailscale interface (`shared/network.py`) or fallback to `TAILSCALE_IP`.
+
+### Master Agent (`http://<master-tailscale-ip>:8000`)
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/requirements/decompose` | Decomposes raw requirement text into structured, typed subtasks with capability weights. |
+| `POST` | `/api/v1/agents` | Registers a worker agent node with model metadata and capability scores (0–100). |
+| `GET`  | `/api/v1/agents` | Lists all active registered worker agents. |
+| `POST` | `/api/v1/tasks/dispatch` | Evaluates candidate nodes and dispatches a task to the best matching agent. |
+| `POST` | `/api/v1/agents/{agent_id}/tasks` | Dispatches a task directly to a specific target agent node. |
+| `GET`  | `/api/v1/tasks` | Lists all dispatch history records and round-trip execution logs. |
+| `GET`  | `/api/v1/tasks/{task_id}` | Retrieves dispatch status, errors, and worker acknowledgement for a specific task. |
+
+### Worker Agent (`http://<worker-tailscale-ip>:8001+`)
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/agent/v1/tasks` | Ingests a task, returns immediate ACK (`<= 200 ms`), and executes via Ollama in the background. |
+| `GET`  | `/agent/v1/tasks/{task_id}/result` | Polls the asynchronous execution status and output text for a task. |
+| `GET`  | `/agent/v1/health` | Telemetry endpoint returning node status (`idle`/`busy`), queue size, and supported task types. |
+
+---
+
+## Running the System
+
+### Network Security (Tailnet Binding)
+Each node must run Tailscale logged into the team tailnet (`tailscale up`). Services automatically read their bind address from `tailscale ip -4`. If neither Tailscale nor the `TAILSCALE_IP` environment variable is detected, startup fails loudly with `TailscaleIPError` to prevent accidental public network exposure (`0.0.0.0`).
+
+### 1. Start a Worker Agent (Port 8001+)
 ```bash
-uvicorn backend.main:app --port 8000
-# then open frontend/index.html in your browser
-```
+# Pull model before starting (one time)
+ollama pull llama3
 
-From the page you can register and remove agents (name, model, and
-coding/reasoning/context scores) and decompose a requirement into tasks.
-The backend exposes `GET/POST /api/agents`, `DELETE /api/agents/{name}`,
-`POST /api/decompose` and `GET /api/health`. If Ollama is not running,
-`/api/decompose` returns a fixed 5-task fallback result instead of failing.
-
-> **Note:** `backend/` and `master/` both default to port 8000. To run them
-> together, start the master on another port, e.g.
-> `MASTER_PORT=8010 python -m master.main`. They also use different agent
-> formats (`/api/agents` in `backend/`, `/api/v1/agents` in `master/`).
-> Merging them is planned for Sprint 3, see `docs/architecture.md`.
-
-## Run
-
-Each computer needs Tailscale installed and logged into the same tailnet
-(`tailscale up`). The master and every agent bind to that machine's
-Tailscale IP, not `0.0.0.0`, so the API is only reachable over the tailnet —
-not the LAN or the open internet.
-
-```bash
-# Terminal 1 — an agent (on any computer in the tailnet)
+# Run worker agent
 AGENT_ID=agent-a AGENT_MODEL=llama3 AGENT_SUPPORTED_TYPES=backend,testing \
   python -m agent.main
+```
+*Worker Configuration Variables:*
+- `AGENT_ID`: Unique node identifier (alphanumeric, dashes, underscores).
+- `AGENT_MODEL`: Model name registered in Ollama.
+- `AGENT_SUPPORTED_TYPES`: Comma-separated list (`frontend,backend,database,testing,documentation`).
+- `AGENT_MAX_QUEUE`: Maximum queue depth (default `5`, excess triggers HTTP 200 rejection).
+- `AGENT_PORT`: Port to listen on (default `8001`).
 
-# Terminal 2 — the master (same or another computer in the tailnet)
+### 2. Start the Master Agent (Port 8000)
+```bash
 python -m master.main
 ```
+*Master Configuration Variables:*
+- `MASTER_PORT`: Gateway port (default `8000`).
+- `AGENT_TIMEOUT_SECONDS`: Maximum latency tolerated for worker task ACK (default `5` seconds).
 
-Agent environment variables: `AGENT_ID`, `AGENT_MODEL` (must match a model
-pulled with `ollama pull <name>`), `AGENT_SUPPORTED_TYPES` (comma-separated,
-default all), `AGENT_MAX_QUEUE` (default 5), `OLLAMA_BASE_URL` (default
-`http://localhost:11434`), `OLLAMA_TIMEOUT_SECONDS` (default 120),
-`AGENT_PORT` (default 8001). Master: `AGENT_TIMEOUT_SECONDS` (default 5),
-`MASTER_PORT` (default 8000).
+---
 
-Both read their bind address from `tailscale ip -4`. If the `tailscale` CLI
-isn't available or you want to pin a specific address, set `TAILSCALE_IP`
-instead — startup fails loudly if neither is available, rather than silently
-falling back to `0.0.0.0`.
+## Local Verification & Testing
 
-An agent needs a running Ollama server to execute tasks: `ollama serve` (or
-the system service), then `ollama pull <model>` once per model. A task is
-still acknowledged immediately even if Ollama is unreachable or the pulled
-model name doesn't match `AGENT_MODEL` — execution then fails in the
-background and `GET /agent/v1/tasks/{task_id}/result` reports `status:
-"failed"` with the reason.
-
-## Supported & Example Models
-
-The `backend/agents.json` file contains example agent configurations. In our distributed architecture, we plan to utilize the following real AI models based on their specific strengths:
-
-1. **Gemini Flash (API):** Master agent and requirements analysis (highest context capacity).
-2. **Qwen2.5-Coder (Ollama):** Frontend and backend code generation.
-3. **DeepSeek-R1 (Ollama):** Reasoning, task decomposition, and planning.
-4. **Llama 3.1 / 3.2 (Ollama / Groq):** Fast testing and code review agents.
-5. **OpenRouter / Alternative Models:** Fallback and alternative family options.
-6. **Phi-3/4 mini (Ollama):** Lightweight tasks and documentation for lower-spec machines.
-
-## Try it
-
-To try everything on one computer without Tailscale, pin the bind address
-to localhost in each terminal before starting the master or the agent:
+To test everything on a single machine without an active Tailscale network, pin the bind address to localhost:
 
 ```bash
+# PowerShell (Windows):
+$env:TAILSCALE_IP="127.0.0.1"
+
+# Linux / macOS:
 export TAILSCALE_IP=127.0.0.1
 ```
 
-The `localhost` examples below only work this way (or from a machine that
-uses the master's Tailscale IP instead of `localhost`).
-
-### Decompose a requirement (Sprint 1)
-
+### 1. Decompose a Requirement (Sprint 1)
 ```bash
-curl -X POST localhost:8000/api/v1/requirements/decompose -H 'content-type: application/json' \
-  -d '{"requirement_text":"Build a library management system where librarians can add, update, and remove books, members can borrow and return books, and the system tracks due dates and overdue fines."}'
+curl -X POST http://localhost:8000/api/v1/requirements/decompose \
+  -H "Content-Type: application/json" \
+  -d '{"requirement_text": "Build a library management system with loan tracking and overdue fine calculation."}'
 ```
 
-Returns a `project_title`, `summary`, and a `tasks` list — each task has a
-`task_id`, `category` (`frontend`/`backend`/`database`/`testing`/`documentation`/…),
-`description`, and `dependencies` (other `task_id`s that must finish first).
-Empty or whitespace-only `requirement_text` returns `400` with a clear error.
-
-This calls a local Ollama model (same setup as the worker agents — no cloud
-API key). Master env vars: `MASTER_OLLAMA_BASE_URL` (default
-`http://localhost:11434`), `MASTER_OLLAMA_MODEL` (default `llama3`, must be
-pulled with `ollama pull <name>`), `MASTER_OLLAMA_TIMEOUT_SECONDS` (default
-120). If Ollama is unreachable or answers with something that doesn't fit
-the schema, the endpoint falls back to a fixed, deterministic breakdown
-instead of failing — so it still works offline and in CI.
-
-### Dispatch a task to an agent (Sprint 2)
-
-Register agents with their capability scores (`coding`/`reasoning`/`context`,
-0-100 each; omit for an average 50/50/50 agent):
-
+### 2. Register Agents
 ```bash
-curl -X POST localhost:8000/api/v1/agents -H 'content-type: application/json' \
-  -d '{"agent_id":"agent-a","base_url":"http://localhost:8001","model":"llama3","capabilities":{"coding":90,"reasoning":70,"context":80}}'
+# Register a high-capability agent
+curl -X POST http://localhost:8000/api/v1/agents \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":"agent-strong","base_url":"http://localhost:8001","model":"llama3","capabilities":{"coding":90,"reasoning":85,"context":80}}'
+
+# Register a lightweight agent
+curl -X POST http://localhost:8000/api/v1/agents \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":"agent-weak","base_url":"http://localhost:8002","model":"qwen2.5-coder:1.5b","capabilities":{"coding":40,"reasoning":40,"context":50}}'
 ```
 
-Send to a specific agent by id:
-
+### 3. Dynamic Dispatching & Model Selection (Sprint 2)
+Dispatch a task requiring high coding capability (`coding >= 80`). The master automatically routes the task to `agent-strong`:
 ```bash
-curl -X POST localhost:8000/api/v1/agents/agent-a/tasks -H 'content-type: application/json' \
-  -d '{"type":"backend","title":"Book CRUD API","description":"Create REST endpoints for books."}'
+curl -X POST http://localhost:8000/api/v1/tasks/dispatch \
+  -H "Content-Type: application/json" \
+  -d '{"type":"backend","title":"Book CRUD API","description":"Build REST endpoints","required_capabilities":{"coding":80,"reasoning":0,"context":0}}'
 ```
 
-Or let the master pick the best-suited registered agent itself, based on
-`required_capabilities` (also 0-100 each, defaults to 50/50/50):
-
+### 4. Fetch Background Execution Result
 ```bash
-curl -X POST localhost:8000/api/v1/tasks/dispatch -H 'content-type: application/json' \
-  -d '{"type":"backend","title":"Book CRUD API","description":"Create REST endpoints for books.","required_capabilities":{"coding":80,"reasoning":0,"context":0}}'
+curl http://localhost:8001/agent/v1/tasks/<task_id>/result
 ```
 
-The response's `task.task_id` lets you poll the agent directly for the
-model's output once it finishes running (execution is a Sprint 3 preview,
-separate from the ack contract above):
+---
 
-```bash
-curl localhost:8001/agent/v1/tasks/<task_id>/result
-```
+## Automated Test Suite
 
-Or use the Swagger UI at http://localhost:8000/docs (from the master's own
-machine) or `http://<master-tailscale-ip>:8000/docs` from elsewhere in the
-tailnet.
-
-For agents on other computers, use that computer's Tailscale IP in
-`base_url` (e.g. `http://100.x.y.z:8001`) — `tailscale ip -4` on that
-computer prints it, or `tailscale status` lists every machine's address
-from any computer in the tailnet.
-
-## Test
+All 21 automated unit and integration tests run entirely in-memory using `httpx.ASGITransport` and `httpx.MockTransport` without requiring external network connectivity or a running Ollama daemon:
 
 ```bash
 pytest -q
 ```
+
+**Test Coverage:**
+- `tests/test_decompose.py` (5 tests): Requirement parsing, fallback handling on model error, empty payload rejection.
+- `tests/test_dispatch.py` (12 tests): SLA acknowledgement (<= 200 ms), idempotency, queue overflow, network timeouts (504), unreachable hosts (503), health status.
+- `tests/test_selection.py` (4 tests): Capability-based routing algorithm, threshold filtering, score tie-breaking, 404 unfulfilled criteria handling.
