@@ -92,7 +92,10 @@ class TaskAcknowledgement(BaseModel):
 
 class AgentRegistration(BaseModel):
     agent_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
-    base_url: HttpUrl
+    base_url: HttpUrl | None = Field(
+        default=None,
+        description="Where the agent's API listens. Without it the agent is registered but always offline.",
+    )
     model: str = Field(min_length=1)
     capabilities: CapabilityScores = Field(
         default_factory=CapabilityScores,

@@ -6,9 +6,12 @@ TAILSCALE_IP env var) so the API is only reachable over the tailnet.
 Run:  python -m master.main
 """
 
+import json
+import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from uuid import UUID
 
 import httpx
@@ -17,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 
 from master.decompose import DecomposeResponse, decompose_requirement
-from master.selection import select_agent
+from master.selection import AgentStatus, fetch_statuses, qualifying_agents
 from shared.schemas import (
     AckStatus,
     AgentRegistration,
@@ -29,17 +32,44 @@ from shared.schemas import (
 )
 
 AGENT_TIMEOUT_SECONDS = float(os.getenv("AGENT_TIMEOUT_SECONDS", "5"))
+AGENT_HEALTH_TIMEOUT_SECONDS = float(os.getenv("AGENT_HEALTH_TIMEOUT_SECONDS", "2"))
+AGENTS_FILE = os.getenv(
+    "MASTER_AGENTS_FILE", str(Path(__file__).resolve().parent.parent / "backend" / "agents.json")
+)
 OLLAMA_BASE_URL = os.getenv("MASTER_OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("MASTER_OLLAMA_MODEL", "llama3.2")
 OLLAMA_TIMEOUT_SECONDS = float(os.getenv("MASTER_OLLAMA_TIMEOUT_SECONDS", "120"))
+
+logger = logging.getLogger("master")
+
+
+def load_agents(path: str | Path) -> dict[str, AgentRegistration]:
+    """Read the agent registry file. The file is shared with backend/main.py,
+    which may write entries without an agent_id, so bad entries are skipped
+    with a warning instead of stopping the master from starting."""
+    file = Path(path)
+    if not file.exists():
+        logger.warning("agents file %s not found; starting with no registered agents", file)
+        return {}
+    agents: dict[str, AgentRegistration] = {}
+    for entry in json.loads(file.read_text(encoding="utf-8")):
+        try:
+            agent = AgentRegistration.model_validate(entry)
+        except ValidationError as exc:
+            logger.warning("skipping invalid entry in %s: %s (%s)", file, entry, exc.errors()[0]["msg"])
+            continue
+        agents[agent.agent_id] = agent
+    return agents
 
 
 def create_app(
     transport: httpx.AsyncBaseTransport | None = None,
     ollama_transport: httpx.AsyncBaseTransport | None = None,
+    agents_file: str | Path | None = AGENTS_FILE,
 ) -> FastAPI:
     """`transport` lets tests route agent calls in-process; `ollama_transport`
-    does the same for the local Ollama call used to decompose requirements."""
+    does the same for the local Ollama call used to decompose requirements.
+    `agents_file` pre-registers agents at startup; None starts empty."""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -54,8 +84,8 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    # In-memory for Sprint 2; replace with the Sprint 1 agent registry / a database later.
-    agents: dict[str, AgentRegistration] = {}
+    # Seeded from agents_file; later registrations live in memory only.
+    agents: dict[str, AgentRegistration] = load_agents(agents_file) if agents_file else {}
     dispatches: dict[UUID, DispatchRecord] = {}
     ollama_client = httpx.AsyncClient(
         base_url=OLLAMA_BASE_URL, transport=ollama_transport, timeout=OLLAMA_TIMEOUT_SECONDS
@@ -91,6 +121,9 @@ def create_app(
             )
             return HTTPException(code, {"task_id": str(message.task_id), "error": error})
 
+        if agent.base_url is None:
+            raise fail(status.HTTP_503_SERVICE_UNAVAILABLE, f"agent '{agent.agent_id}' has no base_url configured")
+
         try:
             response = await app.state.http.post(url, json=message.model_dump(mode="json"))
             response.raise_for_status()
@@ -125,14 +158,28 @@ def create_app(
 
     @app.post("/api/v1/tasks/dispatch", response_model=DispatchRecord)
     async def dispatch_task(spec: TaskSpec) -> DispatchRecord:
-        """Pick the best-suited registered agent via the selection algorithm
-        (master/selection.py) and send the task to it."""
-        agent = select_agent(list(agents.values()), spec)
-        if agent is None:
+        """Send the task to the best-scoring agent that meets its
+        required_capabilities and is currently idle (master/selection.py)."""
+        if not agents:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no agents are registered")
+
+        candidates = qualifying_agents(list(agents.values()), spec)
+        if not candidates:
+            required = spec.required_capabilities.model_dump()
             raise HTTPException(
-                status.HTTP_404_NOT_FOUND, "no registered agent meets the task's required_capabilities"
+                status.HTTP_404_NOT_FOUND,
+                f"no registered agent meets the required capabilities {required}",
             )
-        return await dispatch_to_agent(agent, spec)
+
+        statuses = await fetch_statuses(app.state.http, candidates, AGENT_HEALTH_TIMEOUT_SECONDS)
+        chosen = next((a for a in candidates if statuses[a.agent_id] == AgentStatus.IDLE), None)
+        if chosen is None:
+            summary = ", ".join(f"{agent_id} is {state}" for agent_id, state in statuses.items())
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                f"every agent that meets the required capabilities is busy or offline: {summary}",
+            )
+        return await dispatch_to_agent(chosen, spec)
 
     @app.get("/api/v1/tasks", response_model=list[DispatchRecord])
     def list_tasks() -> list[DispatchRecord]:

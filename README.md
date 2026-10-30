@@ -68,7 +68,8 @@ pulled with `ollama pull <name>`), `AGENT_SUPPORTED_TYPES` (comma-separated,
 default all), `AGENT_MAX_QUEUE` (default 5), `OLLAMA_BASE_URL` (default
 `http://localhost:11434`), `OLLAMA_TIMEOUT_SECONDS` (default 120),
 `AGENT_PORT` (default 8001). Master: `AGENT_TIMEOUT_SECONDS` (default 5),
-`MASTER_PORT` (default 8000).
+`AGENT_HEALTH_TIMEOUT_SECONDS` (default 2), `MASTER_AGENTS_FILE` (default
+`backend/agents.json`), `MASTER_PORT` (default 8000).
 
 Both read their bind address from `tailscale ip -4`. If the `tailscale` CLI
 isn't available or you want to pin a specific address, set `TAILSCALE_IP`
@@ -127,8 +128,15 @@ instead of failing — so it still works offline and in CI.
 
 ### Dispatch a task to an agent (Sprint 2)
 
-Register agents with their capability scores (`coding`/`reasoning`/`context`,
-0-100 each; omit for an average 50/50/50 agent):
+On startup the master registers every agent in `backend/agents.json`. For
+the master to send work to one of them, its entry needs a `base_url`
+(`"base_url": "http://<agent-tailscale-ip>:8001"`) and that agent must be
+started with a matching `AGENT_ID`. Entries without a `base_url` are listed
+but always treated as offline.
+
+You can also register more agents at runtime, with their capability scores
+(`coding`/`reasoning`/`context`, 0-100 each; omit for an average 50/50/50
+agent):
 
 ```bash
 curl -X POST localhost:8000/api/v1/agents -H 'content-type: application/json' \
@@ -142,13 +150,19 @@ curl -X POST localhost:8000/api/v1/agents/agent-a/tasks -H 'content-type: applic
   -d '{"type":"backend","title":"Book CRUD API","description":"Create REST endpoints for books."}'
 ```
 
-Or let the master pick the best-suited registered agent itself, based on
-`required_capabilities` (also 0-100 each, defaults to 50/50/50):
+Or let the master pick the agent itself. It picks the highest-scoring agent
+that meets `required_capabilities` (also 0-100 each, defaults to 50/50/50)
+and whose `/agent/v1/health` reports it idle, skipping busy and offline
+agents:
 
 ```bash
 curl -X POST localhost:8000/api/v1/tasks/dispatch -H 'content-type: application/json' \
   -d '{"type":"backend","title":"Book CRUD API","description":"Create REST endpoints for books.","required_capabilities":{"coding":80,"reasoning":0,"context":0}}'
 ```
+
+If no agent qualifies you get `404`. If agents qualify but all of them are
+busy or offline you get `503`, and the message says which agent is in which
+state.
 
 The response's `task.task_id` lets you poll the agent directly for the
 model's output once it finishes running (execution is a Sprint 3 preview,
