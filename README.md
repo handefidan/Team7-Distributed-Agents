@@ -98,6 +98,10 @@ python -m master.main
 *Master Configuration Variables:*
 - `MASTER_PORT`: Gateway port (default `8000`).
 - `AGENT_TIMEOUT_SECONDS`: Maximum latency tolerated for worker task ACK (default `5` seconds).
+- `AGENT_HEALTH_TIMEOUT_SECONDS`: Maximum wait for an agent's health check during selection (default `2` seconds).
+- `MASTER_AGENTS_FILE`: Agent list registered at startup (default `backend/agents.json`).
+
+On startup the master registers every agent in the agents file. For the master to send work to one of them, its entry needs a `base_url` (`"base_url": "http://<agent-tailscale-ip>:8001"`) and that agent must be started with a matching `AGENT_ID`. Entries without a `base_url` are listed but always treated as offline. Dots in an `agent_id` become dashes, so `llama-3.2-reviewer` must be started with `AGENT_ID=llama-3-2-reviewer`.
 
 ---
 
@@ -141,6 +145,8 @@ curl -X POST http://localhost:8000/api/v1/tasks/dispatch \
   -d '{"type":"backend","title":"Book CRUD API","description":"Build REST endpoints","required_capabilities":{"coding":80,"reasoning":0,"context":0}}'
 ```
 
+The master only picks an agent whose `/agent/v1/health` reports it idle, skipping busy and offline agents. If no agent has high enough scores you get `404`. If agents qualify but all of them are busy or offline you get `503`, and the message says which agent is in which state.
+
 ### 4. Fetch Background Execution Result
 ```bash
 curl http://localhost:8001/agent/v1/tasks/<task_id>/result
@@ -150,7 +156,7 @@ curl http://localhost:8001/agent/v1/tasks/<task_id>/result
 
 ## Automated Test Suite
 
-All 39 automated unit and integration tests run entirely in-memory using `httpx.ASGITransport` and `httpx.MockTransport` without requiring external network connectivity or a running Ollama daemon:
+All 59 automated unit and integration tests run entirely in-memory using `httpx.ASGITransport` and `httpx.MockTransport` without requiring external network connectivity or a running Ollama daemon:
 
 ```bash
 python -m pytest -q
@@ -160,5 +166,5 @@ python -m pytest -q
 - `tests/test_classify.py` (16 tests): Fixed capability threshold mapping per task type, type-to-score validation, model override guards.
 - `tests/test_decompose.py` (5 tests): Requirement parsing, fallback handling on model error, empty payload rejection.
 - `tests/test_dependency.py` (14 tests): Label-to-UUID mapping, lifecycle (`PENDING`/`BLOCKED`/`DISPATCHED`/`COMPLETED`/`FAILED`), cycle detection, ready-task ordering, dependency outputs in `context`, API-level dependency flow.
-- `tests/test_dispatch.py` (12 tests): SLA acknowledgement (<= 200 ms), idempotency, queue overflow, network timeouts (504), unreachable hosts (503), health status.
-- `tests/test_selection.py` (4 tests): Capability-based routing algorithm, threshold filtering, score tie-breaking, 404 unfulfilled criteria handling.
+- `tests/test_dispatch.py` (13 tests): SLA acknowledgement (<= 200 ms), idempotency, queue overflow, network timeouts (504), unreachable hosts (503), health status.
+- `tests/test_selection.py` (11 tests): Capability-based routing algorithm, threshold filtering, score tie-breaking, skipping busy and offline agents, 404/503 handling, loading `agents.json` at startup.

@@ -158,6 +158,8 @@ def _agent_transport():
     import httpx
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/agent/v1/health":
+            return httpx.Response(200, json={"status": "idle"})
         body = __import__("json").loads(request.content)
         return httpx.Response(200, json={
             "task_id": body["task_id"], "agent_id": body["agent_id"], "status": "accepted",

@@ -102,6 +102,8 @@ def create_app(settings: AgentSettings | None = None, ollama_transport: httpx.As
             results[task.task_id] = TaskResult(
                 task_id=task.task_id, status=ExecutionStatus.FAILED, error=f"ollama call failed: {exc!r}"
             )
+        finally:
+            queue.remove(task)
 
     @app.post("/agent/v1/tasks", response_model=TaskAcknowledgement)
     def receive_task(task: TaskMessage, background_tasks: BackgroundTasks) -> TaskAcknowledgement:
