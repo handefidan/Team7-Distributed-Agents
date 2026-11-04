@@ -7,6 +7,9 @@ agent (see "Agent selection" below) — the original
 `POST /api/v1/agents/{agent_id}/tasks` is unchanged and still available for
 sending to an explicitly chosen agent.
 
+Sprint 3 adds dependency management and the result flow (see "Sprint 3 endpoints" below
+and [message-flow.md](message-flow.md)). The send/acknowledge contract itself is unchanged.
+
 How the master agent sends a task to a chosen worker agent and how the agent
 acknowledges it. This contract starts once an agent — chosen by the caller or
 by the master's own selection algorithm — has been picked.
@@ -29,7 +32,7 @@ Caller (UI / planner)          Master (:8000)                         Agent (:80
 ```
 
 The acknowledgement only confirms the agent **received** the task (accepted
-into its queue or rejected). Execution results are a separate Sprint 3 flow.
+into its queue or rejected). Execution results are a separate flow, see [message-flow.md](message-flow.md).
 
 ## Agent endpoint (implemented by every agent)
 
@@ -80,6 +83,12 @@ Returns `agent_id`, `model`, `status` (`idle`/`busy`), `queue_size`,
 | `GET /api/v1/agents` | List registered agents |
 | `POST /api/v1/agents/{agent_id}/tasks` | Send a task to the **named** agent and wait for its acknowledgement |
 | `POST /api/v1/tasks/dispatch` | Send a task to the agent **the selection algorithm picks** and wait for its acknowledgement |
+| `POST /api/v1/requirements/decompose` | Split a requirement into typed subtasks (labels `T1`, `T2`, …) |
+| `POST /api/v1/requirements/decompose_and_map` | Same, plus label → UUID mapping and dependency graph (Sprint 3) |
+| `GET /api/v1/plan/ready` | Mapped tasks whose dependencies are all completed (Sprint 3) |
+| `GET /api/v1/plan/tasks/{task_id}/spec` | Ready-to-send `TaskSpec` of a mapped task (Sprint 3) |
+| `POST /api/v1/tasks/{task_id}/complete` | Mark a task completed, optional `{"output": "..."}`; releases dependents (Sprint 3) |
+| `POST /api/v1/tasks/{task_id}/fail` | Mark a task failed; dependents stay blocked (Sprint 3) |
 | `GET /api/v1/tasks` | List all dispatch records |
 | `GET /api/v1/tasks/{task_id}` | Get one dispatch record |
 
@@ -144,6 +153,59 @@ For 502/503/504 the response body is
 `{"detail": {"task_id": "...", "error": "..."}}` and the failed attempt is
 stored, so it can be inspected via `GET /api/v1/tasks/{task_id}` and later
 reassigned (Sprint 4).
+
+## Sprint 3 endpoints
+
+### Dependencies on dispatch
+
+`POST /api/v1/agents/{agent_id}/tasks` and `POST /api/v1/tasks/dispatch` return
+`400` when the task belongs to a decomposed plan and one of its dependencies is not `completed`:
+
+```json
+{"detail": "Task '<uuid>' cannot be dispatched yet because its prerequisite dependencies are not completed."}
+```
+
+Tasks that are not part of a plan (sent directly with a hand-written `TaskSpec`) are not checked.
+After the agent acknowledges a plan task, the task becomes `dispatched` and no longer appears in `/plan/ready`.
+
+### `POST /api/v1/requirements/decompose_and_map`
+
+Body `{"requirement_text": "..."}` → `200`, list of `MappedTask`:
+
+| Field | Notes |
+|---|---|
+| `task_uuid` | Runtime id; use it as `task_id` |
+| `label` | `T1`, `T2`, … from the decomposition |
+| `title`, `category`, `description` | From the decomposition (`category` = task type) |
+| `dependency_uuids` | UUIDs of the tasks that must finish first |
+| `required_capabilities` | Fixed by task type (`master/classify.py`) |
+| `status` | `pending`, `blocked`, `dispatched`, `completed`, `failed` |
+| `output` | Result text after `complete` |
+
+`422` with `"dependency cycle: T1 -> T2 -> T1"` if the decomposition has a cycle; `400` for an empty requirement.
+
+### `GET /api/v1/plan/tasks/{task_id}/spec`
+
+Returns a `TaskSpec` with `task_id` = the plan UUID, `depends_on`, `required_capabilities` and
+`context.dependency_outputs` (`{"T1": "<output>"}`, only for finished prerequisites with an output).
+`404` if the id is not part of a plan.
+
+### `POST /api/v1/tasks/{task_id}/complete` · `POST /api/v1/tasks/{task_id}/fail`
+
+`complete` takes an optional body `{"output": "<text>"}`; both return `{"task_id": "...", "status": "completed" | "failed"}`.
+
+### Agent result (already implemented by every agent)
+
+`GET /agent/v1/tasks/{task_id}/result` → `TaskResult`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `task_id` | UUID | |
+| `status` | `queued` \| `running` \| `completed` \| `failed` | |
+| `output` | string \| null | Model output when `completed` |
+| `error` | string \| null | Reason when `failed` (e.g. Ollama not reachable) |
+
+`404` if the agent never received that `task_id`.
 
 ## Versioning
 

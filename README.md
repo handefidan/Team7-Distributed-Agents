@@ -3,6 +3,7 @@
 A distributed multi-agent system where a central Master Agent decomposes software requirements into typed subtasks, dynamically evaluates candidate worker nodes via capability benchmarking, dispatches tasks over a secure private network (Tailscale), and receives non-blocking acknowledgements while workers execute prompts locally via Ollama.
 
 - **API Contract Specification:** [`docs/api/task-dispatch-contract.md`](docs/api/task-dispatch-contract.md)
+- **Master ↔ Agent Message Flow:** [`docs/api/message-flow.md`](docs/api/message-flow.md)
 - **Model Evaluation Criteria:** [`docs/model-evaluation-criteria.md`](docs/model-evaluation-criteria.md)
 - **Architecture Overview:** [`docs/architecture.md`](docs/architecture.md)
 - **Sprint Reports:** [`Sprint 1`](docs/Team7_Sprint1_Report.docx) · [`Sprint 2`](docs/Team7_Sprint2_Report.docx)
@@ -53,7 +54,10 @@ All Master and Worker endpoints bind strictly to the private Tailscale interface
 | `GET`  | `/api/v1/agents` | Lists all active registered worker agents. |
 | `POST` | `/api/v1/tasks/dispatch` | Evaluates candidate nodes and dispatches a task to the best matching agent if prerequisites are satisfied. |
 | `POST` | `/api/v1/agents/{agent_id}/tasks` | Dispatches a task directly to a specific target agent node (guarded by dependency status). |
-| `POST` | `/api/v1/tasks/{task_id}/complete` | Marks a task as completed and unblocks downstream tasks waiting on its prerequisites. |
+| `GET`  | `/api/v1/plan/ready` | Lists mapped tasks whose prerequisites are all completed (ready to send). |
+| `GET`  | `/api/v1/plan/tasks/{task_id}/spec` | Ready-to-send `TaskSpec` (UUID dependencies, outputs of finished prerequisites in `context`). |
+| `POST` | `/api/v1/tasks/{task_id}/complete` | Marks a task as completed (optional `{"output": "..."}`) and unblocks downstream tasks waiting on it. |
+| `POST` | `/api/v1/tasks/{task_id}/fail` | Marks a task as failed; tasks depending on it stay blocked. |
 | `GET`  | `/api/v1/tasks` | Lists all dispatch history records and round-trip execution logs. |
 | `GET`  | `/api/v1/tasks/{task_id}` | Retrieves dispatch status, errors, and worker acknowledgement for a specific task. |
 
@@ -155,6 +159,6 @@ python -m pytest -q
 **Test Coverage:**
 - `tests/test_classify.py` (16 tests): Fixed capability threshold mapping per task type, type-to-score validation, model override guards.
 - `tests/test_decompose.py` (5 tests): Requirement parsing, fallback handling on model error, empty payload rejection.
-- `tests/test_dependency.py` (2 tests): Label-to-UUID mapping, lifecycle state management (`PENDING`/`BLOCKED`/`COMPLETED`), prerequisite execution guardrails.
+- `tests/test_dependency.py` (14 tests): Label-to-UUID mapping, lifecycle (`PENDING`/`BLOCKED`/`DISPATCHED`/`COMPLETED`/`FAILED`), cycle detection, ready-task ordering, dependency outputs in `context`, API-level dependency flow.
 - `tests/test_dispatch.py` (12 tests): SLA acknowledgement (<= 200 ms), idempotency, queue overflow, network timeouts (504), unreachable hosts (503), health status.
 - `tests/test_selection.py` (4 tests): Capability-based routing algorithm, threshold filtering, score tie-breaking, 404 unfulfilled criteria handling.

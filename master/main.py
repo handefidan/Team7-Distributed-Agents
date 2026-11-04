@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 
 from master.decompose import DecomposeResponse, decompose_requirement
-from master.dependency import DependencyManager, MappedTask
+from master.dependency import CyclicDependencyError, DependencyManager, MappedTask
 from master.selection import select_agent
 from shared.schemas import (
     AckStatus,
@@ -80,7 +80,10 @@ def create_app(
         if not text:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "requirement_text cannot be empty")
         decomp = await decompose_requirement(text, ollama_client, OLLAMA_MODEL)
-        return dep_manager.register_decomposition(decomp)
+        try:
+            return dep_manager.register_decomposition(decomp)
+        except CyclicDependencyError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
     
     @app.post("/api/v1/agents", response_model=AgentRegistration, status_code=status.HTTP_201_CREATED)
     def register_agent(agent: AgentRegistration) -> AgentRegistration:
@@ -125,6 +128,8 @@ def create_app(
             round_trip_ms=round((time.perf_counter() - started) * 1000, 2),
         )
         dispatches[message.task_id] = record
+        if record.status == DispatchStatus.ACKNOWLEDGED:
+            dep_manager.mark_dispatched(message.task_id)
         return record
 
     @app.post("/api/v1/agents/{agent_id}/tasks", response_model=DispatchRecord)
@@ -155,11 +160,32 @@ def create_app(
             )
         return await dispatch_to_agent(agent, spec)
 
+    class CompletePayload(BaseModel):
+        output: str | None = None
+
+    @app.get("/api/v1/plan/ready", response_model=list[MappedTask])
+    def ready_tasks() -> list[MappedTask]:
+        """Mapped tasks whose prerequisites are all completed and that can be dispatched now."""
+        return dep_manager.get_ready_tasks()
+
+    @app.get("/api/v1/plan/tasks/{task_id}/spec", response_model=TaskSpec)
+    def task_spec(task_id: UUID) -> TaskSpec:
+        """Ready-to-dispatch TaskSpec of a mapped task (real UUIDs, dependency outputs in context)."""
+        if task_id not in dep_manager.tasks:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "task is not part of a decomposed plan")
+        return dep_manager.to_task_spec(task_id)
+
     @app.post("/api/v1/tasks/{task_id}/complete", status_code=status.HTTP_200_OK)
-    def complete_task(task_id: UUID) -> dict[str, str]:
-        """Marks a task as completed and releases any dependent downstream tasks."""
-        dep_manager.mark_completed(task_id)
+    def complete_task(task_id: UUID, payload: CompletePayload | None = None) -> dict[str, str]:
+        """Marks a task as completed (optionally storing its output) and releases dependent tasks."""
+        dep_manager.mark_completed(task_id, payload.output if payload else None)
         return {"task_id": str(task_id), "status": "completed"}
+
+    @app.post("/api/v1/tasks/{task_id}/fail", status_code=status.HTTP_200_OK)
+    def fail_task(task_id: UUID) -> dict[str, str]:
+        """Marks a task as failed; tasks that depend on it stay blocked."""
+        dep_manager.mark_failed(task_id)
+        return {"task_id": str(task_id), "status": "failed"}
     
     @app.get("/api/v1/tasks", response_model=list[DispatchRecord])
     def list_tasks() -> list[DispatchRecord]:
