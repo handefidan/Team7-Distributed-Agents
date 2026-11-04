@@ -9,16 +9,18 @@ A distributed multi-agent system where a central Master Agent decomposes softwar
 - **Trello Board:** <https://trello.com/b/Zc1eozhQ>
 
 ```
-backend/                      Sprint 1 web page API (port 8000)
-frontend/index.html          Sprint 1 web interface (browser UI)
-shared/schemas.py            API Contract v1.0 (Pydantic models & validation)
-shared/network.py            Tailscale IP binding & fail-safe interface isolation
-master/decompose.py          Requirement -> subtasks breakdown (Sprint 1)
-master/selection.py          Deterministic capability-based agent selection algorithm (Sprint 2)
-master/main.py               Master Agent API gateway (port 8000)
-agent/main.py                Worker Agent execution API & Ollama engine (port 8001+)
-tests/                       Pytest suite (21 unit and integration tests)
-docs/                        Architecture diagrams, specifications, and sprint reports
+backend/                  Sprint 1 web page API (port 8000)
+frontend/index.html       Sprint 1 web interface (browser UI)
+shared/schemas.py         API Contract v1.0 (Pydantic models & validation)
+shared/network.py         Tailscale IP binding & fail-safe interface isolation
+master/decompose.py       Requirement -> subtasks breakdown (Sprint 1)
+master/classify.py        Fixed capability threshold mapping per task type (Sprint 2)
+master/selection.py       Deterministic capability-based agent selection algorithm (Sprint 2)
+master/dependency.py      Label-to-UUID mapping & prerequisite execution guardrails (Sprint 3)
+master/main.py            Master Agent API gateway (port 8000)
+agent/main.py             Worker Agent execution API & Ollama engine (port 8001+)
+tests/                    Pytest suite (39 unit and integration tests)
+docs/                     Architecture diagrams, specifications, and sprint reports
 ```
 
 ## Setup & Environment
@@ -46,10 +48,12 @@ All Master and Worker endpoints bind strictly to the private Tailscale interface
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/api/v1/requirements/decompose` | Decomposes raw requirement text into structured, typed subtasks with capability weights. |
+| `POST` | `/api/v1/requirements/decompose_and_map` | Decomposes requirements and automatically maps text labels (`T1`, `T2`) to runtime UUIDs with dependency graphs. |
 | `POST` | `/api/v1/agents` | Registers a worker agent node with model metadata and capability scores (0–100). |
 | `GET`  | `/api/v1/agents` | Lists all active registered worker agents. |
-| `POST` | `/api/v1/tasks/dispatch` | Evaluates candidate nodes and dispatches a task to the best matching agent. |
-| `POST` | `/api/v1/agents/{agent_id}/tasks` | Dispatches a task directly to a specific target agent node. |
+| `POST` | `/api/v1/tasks/dispatch` | Evaluates candidate nodes and dispatches a task to the best matching agent if prerequisites are satisfied. |
+| `POST` | `/api/v1/agents/{agent_id}/tasks` | Dispatches a task directly to a specific target agent node (guarded by dependency status). |
+| `POST` | `/api/v1/tasks/{task_id}/complete` | Marks a task as completed and unblocks downstream tasks waiting on its prerequisites. |
 | `GET`  | `/api/v1/tasks` | Lists all dispatch history records and round-trip execution logs. |
 | `GET`  | `/api/v1/tasks/{task_id}` | Retrieves dispatch status, errors, and worker acknowledgement for a specific task. |
 
@@ -70,10 +74,10 @@ Each node must run Tailscale logged into the team tailnet (`tailscale up`). Serv
 ### 1. Start a Worker Agent (Port 8001+)
 ```bash
 # Pull model before starting (one time)
-ollama pull llama3
+ollama run llama3.2:3b
 
 # Run worker agent
-AGENT_ID=agent-a AGENT_MODEL=llama3 AGENT_SUPPORTED_TYPES=backend,testing \
+AGENT_ID=agent-a AGENT_MODEL=llama3.2:3b AGENT_SUPPORTED_TYPES=backend,testing \
   python -m agent.main
 ```
 *Worker Configuration Variables:*
@@ -105,9 +109,9 @@ $env:TAILSCALE_IP="127.0.0.1"
 export TAILSCALE_IP=127.0.0.1
 ```
 
-### 1. Decompose a Requirement (Sprint 1)
+### 1. Decompose & Map Requirements (Sprint 3)
 ```bash
-curl -X POST http://localhost:8000/api/v1/requirements/decompose \
+curl -X POST http://localhost:8000/api/v1/requirements/decompose_and_map \
   -H "Content-Type: application/json" \
   -d '{"requirement_text": "Build a library management system with loan tracking and overdue fine calculation."}'
 ```
@@ -117,7 +121,7 @@ curl -X POST http://localhost:8000/api/v1/requirements/decompose \
 # Register a high-capability agent
 curl -X POST http://localhost:8000/api/v1/agents \
   -H "Content-Type: application/json" \
-  -d '{"agent_id":"agent-strong","base_url":"http://localhost:8001","model":"llama3","capabilities":{"coding":90,"reasoning":85,"context":80}}'
+  -d '{"agent_id":"agent-strong","base_url":"http://localhost:8001","model":"llama3.2:3b","capabilities":{"coding":90,"reasoning":85,"context":80}}'
 
 # Register a lightweight agent
 curl -X POST http://localhost:8000/api/v1/agents \
@@ -125,8 +129,8 @@ curl -X POST http://localhost:8000/api/v1/agents \
   -d '{"agent_id":"agent-weak","base_url":"http://localhost:8002","model":"qwen2.5-coder:1.5b","capabilities":{"coding":40,"reasoning":40,"context":50}}'
 ```
 
-### 3. Dynamic Dispatching & Model Selection (Sprint 2)
-Dispatch a task requiring high coding capability (`coding >= 80`). The master automatically routes the task to `agent-strong`:
+### 3. Dynamic Dispatching & Model Selection (Sprint 2 & 3)
+Dispatch a task requiring high coding capability (`coding >= 80`). The master automatically routes the task to `agent-strong` provided all prerequisite dependencies are satisfied:
 ```bash
 curl -X POST http://localhost:8000/api/v1/tasks/dispatch \
   -H "Content-Type: application/json" \
@@ -142,13 +146,15 @@ curl http://localhost:8001/agent/v1/tasks/<task_id>/result
 
 ## Automated Test Suite
 
-All 21 automated unit and integration tests run entirely in-memory using `httpx.ASGITransport` and `httpx.MockTransport` without requiring external network connectivity or a running Ollama daemon:
+All 39 automated unit and integration tests run entirely in-memory using `httpx.ASGITransport` and `httpx.MockTransport` without requiring external network connectivity or a running Ollama daemon:
 
 ```bash
-pytest -q
+python -m pytest -q
 ```
 
 **Test Coverage:**
+- `tests/test_classify.py` (16 tests): Fixed capability threshold mapping per task type, type-to-score validation, model override guards.
 - `tests/test_decompose.py` (5 tests): Requirement parsing, fallback handling on model error, empty payload rejection.
+- `tests/test_dependency.py` (2 tests): Label-to-UUID mapping, lifecycle state management (`PENDING`/`BLOCKED`/`COMPLETED`), prerequisite execution guardrails.
 - `tests/test_dispatch.py` (12 tests): SLA acknowledgement (<= 200 ms), idempotency, queue overflow, network timeouts (504), unreachable hosts (503), health status.
 - `tests/test_selection.py` (4 tests): Capability-based routing algorithm, threshold filtering, score tie-breaking, 404 unfulfilled criteria handling.
