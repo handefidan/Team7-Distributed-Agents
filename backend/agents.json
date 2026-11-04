@@ -1,60 +1,48 @@
 [
   {
-    "agent_id": "qwen-coder-small",
-    "name": "Qwen Coder 1.5B",
-    "model": "qwen2.5-coder:1.5b",
+    "agent_id": "qwen-3-coder",
+    "name": "Qwen 3 Coder",
+    "model": "qwen3:4b",
     "provider": "ollama",
-    "description": "Lightweight code agent specialized for backend APIs, test generation, and task decomposition.",
+    "description": "Specialized high-performance coding agent for backend logic generation, syntax correction, and code refactoring.",
     "capabilities": {
-      "coding": 85,
-      "reasoning": 78,
+      "coding": 95,
+      "reasoning": 82,
       "context": 80
     }
   },
   {
-    "agent_id": "qwen-coder-large",
-    "name": "Qwen Coder 7B",
-    "model": "qwen2.5-coder:7b",
+    "agent_id": "llama-3.2-reviewer",
+    "name": "Llama 3.2 Reviewer",
+    "model": "llama3.2:3b",
     "provider": "ollama",
-    "description": "Specialized code agent for complex backend operations and database schema migrations.",
+    "description": "Fast evaluation agent specialized for test case generation, concise code reviews, and structural validation.",
     "capabilities": {
-      "coding": 94,
-      "reasoning": 88,
+      "coding": 85,
+      "reasoning": 85,
+      "context": 75
+    }
+  },
+  {
+    "agent_id": "gemma-3-general",
+    "name": "Gemma 3 Generalist",
+    "model": "gemma3:4b",
+    "provider": "ollama",
+    "description": "Balanced general-purpose agent optimized for requirements analysis, complex logic decomposition, and multi-domain text processing.",
+    "capabilities": {
+      "coding": 75,
+      "reasoning": 92,
       "context": 90
     }
   },
   {
-    "agent_id": "llama-general",
-    "name": "Llama 3.2 3B",
-    "model": "llama3.2:3b",
+    "agent_id": "lightweight-phi4",
+    "name": "Phi-4 Mini Assistant",
+    "model": "phi4-mini",
     "provider": "ollama",
-    "description": "General purpose agent tailored for architecture analysis and requirements documentation.",
+    "description": "Lightweight and efficient agent tailored for low-resource environments, documentation tasks, and quick utility operations.",
     "capabilities": {
-      "coding": 72,
-      "reasoning": 82,
-      "context": 85
-    }
-  },
-  {
-    "agent_id": "llama-reasoning",
-    "name": "Llama 3 8B",
-    "model": "llama3:8b",
-    "provider": "ollama",
-    "description": "Reasoning and general agent optimized for system architecture and deep task decomposition.",
-    "capabilities": {
-      "coding": 78,
-      "reasoning": 86,
-      "context": 85
-    }
-  },
-  {
-    "agent_id": "codellama-ui",
-    "name": "CodeLlama 7B",
-    "model": "codellama:7b",
-    "provider": "ollama",
-    "description": "Code generation agent dedicated to frontend UI components, modals, and unit tests.",
-    "capabilities": {
-      "coding": 88,
+      "coding": 70,
       "reasoning": 75,
       "context": 70
     }
