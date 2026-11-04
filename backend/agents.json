@@ -1,73 +1,49 @@
 [
   {
-    "agent_id": "master-gemini",
-    "name": "Gemini Master",
-    "model": "gemini-1.5-flash",
-    "provider": "api",
-    "description": "Master agent responsible for requirements analysis. Highest context window capacity.",
-    "capabilities": {
-      "coding": 85,
-      "reasoning": 92,
-      "context": 100
-    }
-  },
-  {
-    "agent_id": "coder-qwen",
-    "name": "Qwen Coder",
-    "model": "qwen2.5-coder:7b",
+    "agent_id": "qwen-3-coder",
+    "name": "Qwen 3 Coder",
+    "model": "qwen3:4b",
     "provider": "ollama",
-    "description": "Specialized agent for frontend and backend code generation.",
+    "description": "Specialized high-performance coding agent for backend logic generation, syntax correction, and code refactoring.",
     "capabilities": {
       "coding": 95,
-      "reasoning": 80,
+      "reasoning": 82,
       "context": 80
     }
   },
   {
-    "agent_id": "reasoning-deepseek",
-    "name": "DeepSeek Reasoner",
-    "model": "deepseek-r1:8b",
+    "agent_id": "llama-3.2-reviewer",
+    "name": "Llama 3.2 Reviewer",
+    "model": "llama3.2:3b",
     "provider": "ollama",
-    "description": "Specialized agent for task decomposition, complex logic, and strategic planning.",
-    "capabilities": {
-      "coding": 75,
-      "reasoning": 98,
-      "context": 85
-    }
-  },
-  {
-    "agent_id": "reviewer-llama",
-    "name": "Llama Reviewer",
-    "model": "llama3.1:8b",
-    "provider": "groq",
-    "description": "Fast evaluation agent for test case generation and code review.",
+    "description": "Fast evaluation agent specialized for test case generation, concise code reviews, and structural validation.",
     "capabilities": {
       "coding": 85,
-      "reasoning": 82,
+      "reasoning": 85,
       "context": 75
     }
   },
   {
-    "agent_id": "backup-openrouter",
-    "name": "OpenRouter Fallback",
-    "model": "minimax/minimax-01",
-    "provider": "openrouter",
-    "description": "Free fallback/backup agent from an alternative model family routed via OpenRouter.",
+    "agent_id": "gemma-3-general",
+    "name": "Gemma 3 Generalist",
+    "model": "gemma3:4b",
+    "provider": "ollama",
+    "description": "Balanced general-purpose agent optimized for requirements analysis, complex logic decomposition, and multi-domain text processing.",
     "capabilities": {
       "coding": 75,
-      "reasoning": 75,
+      "reasoning": 92,
       "context": 90
     }
   },
   {
-    "agent_id": "lightweight-phi",
-    "name": "Phi Lightweight",
-    "model": "phi3:mini",
+    "agent_id": "lightweight-phi4",
+    "name": "Phi-4 Mini Assistant",
+    "model": "phi4-mini",
     "provider": "ollama",
-    "description": "Lightweight agent tailored for low-resource environments, documentation tasks, and simple operations.",
+    "description": "Lightweight and efficient agent tailored for low-resource environments, documentation tasks, and quick utility operations.",
     "capabilities": {
-      "coding": 60,
-      "reasoning": 65,
+      "coding": 70,
+      "reasoning": 75,
       "context": 70
     }
   },

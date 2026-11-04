@@ -5,7 +5,12 @@ Reviewed and approved for Sprint 2 Week 3-4: still accurate as written below.
 Week 4 adds `POST /api/v1/tasks/dispatch`, where the master itself picks the
 agent (see "Agent selection" below) — the original
 `POST /api/v1/agents/{agent_id}/tasks` is unchanged and still available for
-sending to an explicitly chosen agent.
+sending to an explicitly chosen agent. The master now also pre-registers the
+agents in `agents.json` at startup and skips busy or offline agents when
+picking one.
+
+Sprint 3 adds dependency management and the result flow (see "Sprint 3 endpoints" below
+and [message-flow.md](message-flow.md)). The send/acknowledge contract itself is unchanged.
 
 How the master agent sends a task to a chosen worker agent and how the agent
 acknowledges it. This contract starts once an agent — chosen by the caller or
@@ -29,7 +34,7 @@ Caller (UI / planner)          Master (:8000)                         Agent (:80
 ```
 
 The acknowledgement only confirms the agent **received** the task (accepted
-into its queue or rejected). Execution results are a separate Sprint 3 flow.
+into its queue or rejected). Execution results are a separate flow, see [message-flow.md](message-flow.md).
 
 ## Agent endpoint (implemented by every agent)
 
@@ -76,10 +81,16 @@ Returns `agent_id`, `model`, `status` (`idle`/`busy`), `queue_size`,
 
 | Method & path | Purpose |
 |---|---|
-| `POST /api/v1/agents` | Register an agent (`agent_id`, `base_url`, `model`, `capabilities`) — temporary in-memory registry |
+| `POST /api/v1/agents` | Register an agent (`agent_id`, `base_url`, `model`, `capabilities`) — added to the registry seeded from `agents.json`; not written back to the file |
 | `GET /api/v1/agents` | List registered agents |
 | `POST /api/v1/agents/{agent_id}/tasks` | Send a task to the **named** agent and wait for its acknowledgement |
 | `POST /api/v1/tasks/dispatch` | Send a task to the agent **the selection algorithm picks** and wait for its acknowledgement |
+| `POST /api/v1/requirements/decompose` | Split a requirement into typed subtasks (labels `T1`, `T2`, …) |
+| `POST /api/v1/requirements/decompose_and_map` | Same, plus label → UUID mapping and dependency graph (Sprint 3) |
+| `GET /api/v1/plan/ready` | Mapped tasks whose dependencies are all completed (Sprint 3) |
+| `GET /api/v1/plan/tasks/{task_id}/spec` | Ready-to-send `TaskSpec` of a mapped task (Sprint 3) |
+| `POST /api/v1/tasks/{task_id}/complete` | Mark a task completed, optional `{"output": "..."}`; releases dependents (Sprint 3) |
+| `POST /api/v1/tasks/{task_id}/fail` | Mark a task failed; dependents stay blocked (Sprint 3) |
 | `GET /api/v1/tasks` | List all dispatch records |
 | `GET /api/v1/tasks/{task_id}` | Get one dispatch record |
 
@@ -97,20 +108,57 @@ object — `CapabilityScores` in `shared/schemas.py`:
 Omitting `capabilities` registers an "average" agent (50/50/50), so existing
 callers that don't set it keep working.
 
-### Agent selection
+`base_url` is optional. An agent without one is registered but always
+counts as offline: it is never picked by `/tasks/dispatch`, and sending to
+it by name returns `503`.
 
-`TaskSpec` (used by both send endpoints) takes an optional
-`required_capabilities` object, same shape as `CapabilityScores`, defaulting
-to 50/50/50. `POST /api/v1/tasks/dispatch` (`master/selection.py`):
+### Startup registry (`agents.json`)
 
-1. Keeps only registered agents whose `capabilities` meet or exceed every
+On startup the master registers every agent in `backend/agents.json` (or
+the file named by `MASTER_AGENTS_FILE`), so the list never starts empty.
+Each entry uses the `AgentRegistration` fields above; other keys (`name`,
+`provider`, `description`) are ignored. An entry that fails validation (for
+example, one without an `agent_id`) is skipped with a warning in the log
+and doesn't stop the master from starting. If the file doesn't exist, the
+master starts with no agents.
+
+```json
+{
+  "agent_id": "qwen-coder-large",
+  "model": "qwen2.5-coder:7b",
+  "base_url": "http://100.64.0.12:8001",
+  "capabilities": { "coding": 94, "reasoning": 88, "context": 90 }
+}
+```
+
+### `POST /api/v1/tasks/dispatch`
+
+Request body: `TaskSpec`, the same as `POST /api/v1/agents/{agent_id}/tasks`
+below. It takes an optional `required_capabilities` object with the same
+shape as `CapabilityScores`, defaulting to 50/50/50. The selection logic is
+in `master/selection.py`:
+
+1. Keep only registered agents whose `capabilities` meet or exceed every
    field of the task's `required_capabilities`.
-2. Among those, picks the one with the highest total score (`coding +
-   reasoning + context`); ties break on `agent_id` for a deterministic pick.
-3. Returns `404` if no registered agent qualifies.
+2. Ask each of those agents for its status via `GET /agent/v1/health`, all
+   at once, waiting at most `AGENT_HEALTH_TIMEOUT_SECONDS` (default 2):
+   - `idle`: the agent reported `"status": "idle"`
+   - `busy`: the agent reported anything else (it has tasks in its queue)
+   - `offline`: no `base_url`, unreachable, timed out, or an error response
+3. Among the `idle` agents, pick the one with the highest total score
+   (`coding + reasoning + context`); ties break on `agent_id`.
 
-Once an agent is picked, dispatch proceeds exactly as `POST
-/api/v1/agents/{agent_id}/tasks` below.
+Once an agent is picked, the task is sent exactly as in `POST
+/api/v1/agents/{agent_id}/tasks` below, with the same response and error
+codes.
+
+When no agent can be picked, the response is `{"detail": "<message>"}`:
+
+| HTTP | `detail` | When |
+|---|---|---|
+| 404 | `no agents are registered` | The registry is empty |
+| 404 | `no registered agent meets the required capabilities {...}` | No agent scores high enough |
+| 503 | `every agent that meets the required capabilities is busy or offline: qwen-coder-large is busy, codellama-ui is offline` | Agents qualify, but none is idle right now |
 
 ### `POST /api/v1/agents/{agent_id}/tasks`
 
@@ -144,6 +192,59 @@ For 502/503/504 the response body is
 `{"detail": {"task_id": "...", "error": "..."}}` and the failed attempt is
 stored, so it can be inspected via `GET /api/v1/tasks/{task_id}` and later
 reassigned (Sprint 4).
+
+## Sprint 3 endpoints
+
+### Dependencies on dispatch
+
+`POST /api/v1/agents/{agent_id}/tasks` and `POST /api/v1/tasks/dispatch` return
+`400` when the task belongs to a decomposed plan and one of its dependencies is not `completed`:
+
+```json
+{"detail": "Task '<uuid>' cannot be dispatched yet because its prerequisite dependencies are not completed."}
+```
+
+Tasks that are not part of a plan (sent directly with a hand-written `TaskSpec`) are not checked.
+After the agent acknowledges a plan task, the task becomes `dispatched` and no longer appears in `/plan/ready`.
+
+### `POST /api/v1/requirements/decompose_and_map`
+
+Body `{"requirement_text": "..."}` → `200`, list of `MappedTask`:
+
+| Field | Notes |
+|---|---|
+| `task_uuid` | Runtime id; use it as `task_id` |
+| `label` | `T1`, `T2`, … from the decomposition |
+| `title`, `category`, `description` | From the decomposition (`category` = task type) |
+| `dependency_uuids` | UUIDs of the tasks that must finish first |
+| `required_capabilities` | Fixed by task type (`master/classify.py`) |
+| `status` | `pending`, `blocked`, `dispatched`, `completed`, `failed` |
+| `output` | Result text after `complete` |
+
+`422` with `"dependency cycle: T1 -> T2 -> T1"` if the decomposition has a cycle; `400` for an empty requirement.
+
+### `GET /api/v1/plan/tasks/{task_id}/spec`
+
+Returns a `TaskSpec` with `task_id` = the plan UUID, `depends_on`, `required_capabilities` and
+`context.dependency_outputs` (`{"T1": "<output>"}`, only for finished prerequisites with an output).
+`404` if the id is not part of a plan.
+
+### `POST /api/v1/tasks/{task_id}/complete` · `POST /api/v1/tasks/{task_id}/fail`
+
+`complete` takes an optional body `{"output": "<text>"}`; both return `{"task_id": "...", "status": "completed" | "failed"}`.
+
+### Agent result (already implemented by every agent)
+
+`GET /agent/v1/tasks/{task_id}/result` → `TaskResult`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `task_id` | UUID | |
+| `status` | `queued` \| `running` \| `completed` \| `failed` | |
+| `output` | string \| null | Model output when `completed` |
+| `error` | string \| null | Reason when `failed` (e.g. Ollama not reachable) |
+
+`404` if the agent never received that `task_id`.
 
 ## Versioning
 

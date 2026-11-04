@@ -11,9 +11,10 @@ LLM API — no external API key required.
 import json
 
 import httpx
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from shared.schemas import TaskType
+from master.classify import required_capabilities
+from shared.schemas import CapabilityScores, TaskSpec, TaskType
 
 SYSTEM_PROMPT = """You are an expert Chief Software Architect and Master Orchestrator Agent.
 Analyze the user's software requirement document thoroughly.
@@ -30,6 +31,24 @@ class SubTask(BaseModel):
     category: TaskType
     description: str
     dependencies: list[str] = Field(default_factory=list, description="task_ids that must finish first")
+    required_capabilities: CapabilityScores = Field(
+        default_factory=CapabilityScores,
+        description="Set from the task type (master/classify.py); any value the model sends is replaced.",
+    )
+
+    @model_validator(mode="after")
+    def _classify(self) -> "SubTask":
+        self.required_capabilities = required_capabilities(self.category)
+        return self
+
+    def to_task_spec(self) -> TaskSpec:
+        """The message the master can dispatch to an agent for this subtask."""
+        return TaskSpec(
+            type=self.category,
+            title=self.title,
+            description=self.description,
+            required_capabilities=self.required_capabilities,
+        )
 
 
 class DecomposeResponse(BaseModel):

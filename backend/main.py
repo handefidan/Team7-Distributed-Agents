@@ -19,6 +19,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+from backend.routers.tasks import router as tasks_router
+
+app.include_router(tasks_router)
 
 REGISTRY_PATH = Path(__file__).parent / "agents.json"
 

@@ -24,15 +24,5 @@ The master agent splits a requirement into subtasks and gives each one a **type*
 ## 3. How the master uses it
 
 1. The decomposition gives a subtask a type, for example `backend`.
-2. The master looks up the type in this table: main capability is `coding`.
-3. The selection algorithm picks, among agents that are `idle`, the one with the highest score in that capability. The second capability is used to break ties.
-
-## 4. Decisions to confirm in Sprint Planning
-
-- **One fixed table (this one), not model guesses.** The local model must not invent capability numbers for each task. A fixed table gives the same result every time and is easy to test.
-- **Names and scale.** Capability names are `coding`, `reasoning`, `context`; the scale is 0 to 100 for agents and tasks alike.
-- **Type names.** Use the names in `shared/schemas.py` (`testing`, `documentation`). The older `backend/` API and some documents still say `test` and `docs`; they should be changed to match.
-
-## 5. Week 4
-
-The table becomes a Python dictionary in the master (`TaskType` to main and second capability), so every subtask is labelled with its type and required capability. It is then connected to Mert's selection algorithm.
+2. The classifier (`master/classify.py`) turns the type into required scores: the main capability needs at least **80**, the second at least **60**, the third **0**. For `backend` this is coding 80, reasoning 60, context 0. The values are put on the subtask as `required_capabilities`.
+3. The selection algorithm (`master/selection.py`) keeps only the agents whose three scores all meet the required scores, and picks the one with the highest total score. If no agent qualifies, nothing is sent.

@@ -69,12 +69,21 @@ def test_unsupported_type_is_rejected(master):
     assert "not supported" in r.json()["acknowledgement"]["reason"]
 
 
-def test_full_queue_is_rejected(master):
-    for _ in range(2):
-        master.post("/api/v1/agents/agent-a/tasks", json=TASK)
-    r = master.post("/api/v1/agents/agent-a/tasks", json=TASK)
+def test_full_queue_is_rejected():
+    agent = create_agent(
+        AgentSettings(agent_id="agent-a", model="llama3", max_queue=0), ollama_transport=mock_ollama()
+    )
+    client = make_master(httpx.ASGITransport(app=agent))
+    r = client.post("/api/v1/agents/agent-a/tasks", json=TASK)
     assert r.json()["status"] == "rejected"
     assert "queue is full" in r.json()["acknowledgement"]["reason"]
+    client.__exit__(None, None, None)
+
+
+def test_finished_task_leaves_the_queue():
+    agent = TestClient(create_agent(AgentSettings(agent_id="agent-a", model="llama3"), ollama_transport=mock_ollama()))
+    agent.post("/agent/v1/tasks", json={**TASK, "agent_id": "agent-a"})
+    assert agent.get("/agent/v1/health").json()["status"] == "idle"
 
 
 def test_unknown_agent_returns_404(master):
