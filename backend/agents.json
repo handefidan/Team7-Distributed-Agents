@@ -70,5 +70,14 @@
       "reasoning": 65,
       "context": 70
     }
+  },
+  {
+    "name": "Specialist-A",
+    "model": "qwen2.5-coder:1.5b",
+    "capabilities": {
+      "coding": 90,
+      "reasoning": 70,
+      "context": 60
+    }
   }
 ]
