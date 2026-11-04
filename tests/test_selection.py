@@ -171,5 +171,12 @@ def test_agents_file_is_loaded_at_startup(tmp_path):
 
 
 def test_team_agents_file_is_valid():
-    agents = load_agents(AGENTS_FILE)
-    assert agents, "backend/agents.json should register at least one agent"
+    entries = json.loads(Path(AGENTS_FILE).read_text(encoding="utf-8"))
+    assert entries, "backend/agents.json should list at least one agent"
+    assert len(load_agents(AGENTS_FILE)) == len(entries), "every agent in the team file should load"
+
+
+def test_dots_in_agent_ids_are_normalized(tmp_path):
+    agents_file = tmp_path / "agents.json"
+    agents_file.write_text(json.dumps([{"agent_id": "llama-3.2-reviewer", "model": "llama3.2:3b"}]))
+    assert set(load_agents(agents_file)) == {"llama-3-2-reviewer"}

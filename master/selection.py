@@ -38,6 +38,12 @@ def qualifying_agents(agents: list[AgentRegistration], task: TaskSpec) -> list[A
     return sorted(matches, key=_score, reverse=True)
 
 
+def select_agent(agents: list[AgentRegistration], task: TaskSpec) -> AgentRegistration | None:
+    """Best agent by capabilities alone, without checking whether it is available."""
+    matches = qualifying_agents(agents, task)
+    return matches[0] if matches else None
+
+
 async def fetch_status(client: httpx.AsyncClient, agent: AgentRegistration, timeout: float) -> AgentStatus:
     if agent.base_url is None:
         return AgentStatus.OFFLINE

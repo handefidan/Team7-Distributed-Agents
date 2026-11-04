@@ -53,6 +53,9 @@ def load_agents(path: str | Path) -> dict[str, AgentRegistration]:
         return {}
     agents: dict[str, AgentRegistration] = {}
     for entry in json.loads(file.read_text(encoding="utf-8")):
+        if "agent_id" in entry:
+            # Same normalization as backend/routers/tasks.py: dots aren't allowed in agent ids.
+            entry["agent_id"] = entry["agent_id"].replace(".", "-")
         try:
             agent = AgentRegistration.model_validate(entry)
         except ValidationError as exc:
