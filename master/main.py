@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 
 from master.decompose import DecomposeResponse, decompose_requirement
+from master.dependency import DependencyManager, MappedTask
 from master.selection import select_agent
 from shared.schemas import (
     AckStatus,
@@ -57,6 +58,7 @@ def create_app(
     # In-memory for Sprint 2; replace with the Sprint 1 agent registry / a database later.
     agents: dict[str, AgentRegistration] = {}
     dispatches: dict[UUID, DispatchRecord] = {}
+    dep_manager = DependencyManager() 
     ollama_client = httpx.AsyncClient(
         base_url=OLLAMA_BASE_URL, transport=ollama_transport, timeout=OLLAMA_TIMEOUT_SECONDS
     )
@@ -71,6 +73,15 @@ def create_app(
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "requirement_text cannot be empty")
         return await decompose_requirement(text, ollama_client, OLLAMA_MODEL)
 
+    @app.post("/api/v1/requirements/decompose_and_map", response_model=list[MappedTask])
+    async def decompose_and_map(payload: RequirementPayload) -> list[MappedTask]:
+        """Decomposes requirements and automatically maps text labels (T1, T2) to runtime UUIDs."""
+        text = payload.requirement_text.strip()
+        if not text:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "requirement_text cannot be empty")
+        decomp = await decompose_requirement(text, ollama_client, OLLAMA_MODEL)
+        return dep_manager.register_decomposition(decomp)
+    
     @app.post("/api/v1/agents", response_model=AgentRegistration, status_code=status.HTTP_201_CREATED)
     def register_agent(agent: AgentRegistration) -> AgentRegistration:
         agents[agent.agent_id] = agent
@@ -121,12 +132,22 @@ def create_app(
         agent = agents.get(agent_id)
         if agent is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"agent '{agent_id}' is not registered")
+        if spec.task_id in dep_manager.tasks and not dep_manager.is_ready_for_dispatch(spec.task_id):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Task '{spec.task_id}' cannot be dispatched yet because its prerequisite dependencies are not completed.",
+            )
         return await dispatch_to_agent(agent, spec)
 
     @app.post("/api/v1/tasks/dispatch", response_model=DispatchRecord)
     async def dispatch_task(spec: TaskSpec) -> DispatchRecord:
         """Pick the best-suited registered agent via the selection algorithm
         (master/selection.py) and send the task to it."""
+        if spec.task_id in dep_manager.tasks and not dep_manager.is_ready_for_dispatch(spec.task_id):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Task '{spec.task_id}' cannot be dispatched yet because its prerequisite dependencies are not completed.",
+            )
         agent = select_agent(list(agents.values()), spec)
         if agent is None:
             raise HTTPException(
@@ -134,6 +155,12 @@ def create_app(
             )
         return await dispatch_to_agent(agent, spec)
 
+    @app.post("/api/v1/tasks/{task_id}/complete", status_code=status.HTTP_200_OK)
+    def complete_task(task_id: UUID) -> dict[str, str]:
+        """Marks a task as completed and releases any dependent downstream tasks."""
+        dep_manager.mark_completed(task_id)
+        return {"task_id": str(task_id), "status": "completed"}
+    
     @app.get("/api/v1/tasks", response_model=list[DispatchRecord])
     def list_tasks() -> list[DispatchRecord]:
         return list(dispatches.values())
