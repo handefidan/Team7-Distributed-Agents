@@ -85,10 +85,12 @@ async def run_agent_task_endpoint(payload: TaskExecutionRequest):
     except AgentExecutionError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
 
+    agent_name = getattr(target_agent, "name", target_agent.agent_id)
+
     return {
         "status": "success",
         "agent_id": target_agent.agent_id,
-        "agent_name": target_agent.name,
+        "agent_name": agent_name,
         "model_used": model_name,
         "task_type": payload.task_type,
         "output": output,
