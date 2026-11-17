@@ -23,6 +23,7 @@ TYPE_CAPABILITIES: dict[TaskType, tuple[str, str]] = {
     TaskType.TESTING: ("reasoning", "coding"),
     TaskType.INTEGRATION: ("context", "reasoning"),
     TaskType.DOCUMENTATION: ("context", "reasoning"),
+    TaskType.REVIEW: ("reasoning", "coding"),
 }
 
 
