@@ -6,6 +6,7 @@ TAILSCALE_IP env var) so the API is only reachable over the tailnet.
 Run:  python -m master.main
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -17,6 +18,7 @@ from uuid import UUID
 import httpx
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, ValidationError
 
 from master.decompose import DecomposeResponse, decompose_requirement
@@ -40,6 +42,7 @@ AGENTS_FILE = os.getenv(
 OLLAMA_BASE_URL = os.getenv("MASTER_OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("MASTER_OLLAMA_MODEL", "llama3.2")
 OLLAMA_TIMEOUT_SECONDS = float(os.getenv("MASTER_OLLAMA_TIMEOUT_SECONDS", "120"))
+INDEX_HTML_PATH = Path(__file__).resolve().parent.parent / "frontend" / "index.html"
 
 logger = logging.getLogger("master")
 
@@ -165,7 +168,7 @@ def create_app(
         )
         dispatches[message.task_id] = record
         if record.status == DispatchStatus.ACKNOWLEDGED:
-            dep_manager.mark_dispatched(message.task_id)
+            dep_manager.mark_dispatched(message.task_id, message.agent_id)
         return record
 
     @app.post("/api/v1/agents/{agent_id}/tasks", response_model=DispatchRecord)
@@ -247,6 +250,127 @@ def create_app(
         if record is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "task not found")
         return record
+
+    @app.get("/", response_class=HTMLResponse)
+    @app.get("/dashboard", response_class=HTMLResponse)
+    def serve_dashboard():
+        """Serves the central multi-agent management dashboard."""
+        if INDEX_HTML_PATH.exists():
+            return HTMLResponse(content=INDEX_HTML_PATH.read_text(encoding="utf-8"))
+        return HTMLResponse("<h2>Dashboard frontend/index.html not found.</h2>", status_code=404)
+
+    @app.get("/api/v1/system/info")
+    def system_info():
+        current_ip = "127.0.0.1"
+        try:
+            from shared.network import get_tailscale_ip
+            current_ip = get_tailscale_ip()
+        except Exception:
+            current_ip = os.getenv("TAILSCALE_IP", "127.0.0.1 (Tailscale offline)")
+        port = int(os.getenv("MASTER_PORT", "8000"))
+        return {
+            "tailscale_ip": current_ip,
+            "master_port": port,
+            "master_base_url": f"http://{current_ip}:{port}",
+            "registered_agents_count": len(agents),
+            "total_tasks_count": len(dep_manager.tasks),
+            "ready_tasks_count": len(dep_manager.get_ready_tasks()),
+        }
+
+    @app.get("/api/v1/plan/tasks", response_model=list[MappedTask])
+    def list_plan_tasks() -> list[MappedTask]:
+        """All tasks in the active decomposed plan with their dependency status."""
+        return list(dep_manager.tasks.values())
+
+    @app.post("/api/v1/plan/reset", status_code=status.HTTP_200_OK)
+    def reset_plan() -> dict[str, str]:
+        """Clears the active decomposition plan."""
+        dep_manager.reset()
+        return {"status": "ok", "message": "Plan cleared"}
+
+    @app.get("/api/v1/agents/health")
+    async def check_agents_health():
+        """Live health status and telemetry for every registered agent."""
+        async def check_one(agent: AgentRegistration):
+            agent_data = agent.model_dump(mode="json")
+            if not agent.base_url:
+                return {**agent_data, "status": "offline", "error": "No base_url configured", "queue_size": 0}
+            url = f"{str(agent.base_url).rstrip('/')}/agent/v1/health"
+            try:
+                resp = await app.state.http.get(url, timeout=AGENT_HEALTH_TIMEOUT_SECONDS)
+                if resp.status_code == 200:
+                    h = resp.json()
+                    return {
+                        **agent_data,
+                        "status": h.get("status", "idle"),
+                        "queue_size": h.get("queue_size", 0),
+                        "max_queue": h.get("max_queue", 5),
+                        "supported_types": h.get("supported_types", []),
+                        "model_reported": h.get("model", agent.model),
+                    }
+                return {**agent_data, "status": "offline", "error": f"HTTP {resp.status_code}", "queue_size": 0}
+            except Exception as exc:
+                return {**agent_data, "status": "offline", "error": str(exc), "queue_size": 0}
+
+        tasks = [check_one(a) for a in agents.values()]
+        return await asyncio.gather(*tasks) if tasks else []
+
+    @app.delete("/api/v1/agents/{agent_id}", status_code=status.HTTP_200_OK)
+    def delete_agent(agent_id: str):
+        if agent_id not in agents:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"agent '{agent_id}' not found")
+        del agents[agent_id]
+        return {"message": f"Agent '{agent_id}' removed successfully"}
+
+    @app.get("/api/v1/tasks/{task_id}/poll_worker")
+    async def poll_worker_result(task_id: UUID):
+        """Poll the assigned worker agent for the background execution result."""
+        record = dispatches.get(task_id)
+        if not record:
+            task = dep_manager.tasks.get(task_id)
+            if task:
+                return {"task_id": str(task_id), "status": task.status.value, "output": task.output}
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Task dispatch record not found")
+
+        agent = agents.get(record.task.agent_id)
+        if not agent or not agent.base_url:
+            return {"task_id": str(task_id), "status": "unknown", "error": "Assigned agent not available"}
+
+        url = f"{str(agent.base_url).rstrip('/')}/agent/v1/tasks/{task_id}/result"
+        try:
+            resp = await app.state.http.get(url, timeout=AGENT_HEALTH_TIMEOUT_SECONDS)
+            if resp.status_code == 200:
+                result_data = resp.json()
+                exec_status = result_data.get("status")
+                if exec_status == "completed":
+                    output = result_data.get("output", "")
+                    dep_manager.mark_completed(task_id, output)
+                    return {
+                        "task_id": str(task_id),
+                        "status": "completed",
+                        "output": output,
+                        "agent_id": agent.agent_id,
+                    }
+                elif exec_status == "failed":
+                    dep_manager.mark_failed(task_id)
+                    return {
+                        "task_id": str(task_id),
+                        "status": "failed",
+                        "error": result_data.get("error"),
+                        "agent_id": agent.agent_id,
+                    }
+                else:
+                    return {
+                        "task_id": str(task_id),
+                        "status": exec_status or "running",
+                        "agent_id": agent.agent_id,
+                    }
+            elif resp.status_code == 404:
+                return {"task_id": str(task_id), "status": "queued_or_not_started", "agent_id": agent.agent_id}
+            else:
+                return {"task_id": str(task_id), "status": "error", "error": f"HTTP {resp.status_code}"}
+        except Exception as exc:
+            return {"task_id": str(task_id), "status": "error", "error": str(exc)}
 
     return app
 

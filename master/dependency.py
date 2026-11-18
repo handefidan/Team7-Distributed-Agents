@@ -30,12 +30,17 @@ class MappedTask(BaseModel):
     required_capabilities: CapabilityScores = Field(default_factory=CapabilityScores)
     status: TaskLifecycleStatus = TaskLifecycleStatus.PENDING
     output: str | None = None  # result text, set when the task is completed
+    assigned_agent: str | None = None
 
 
 class DependencyManager:
     def __init__(self) -> None:
         self.tasks: dict[UUID, MappedTask] = {}
         self.label_map: dict[str, UUID] = {}
+
+    def reset(self) -> None:
+        self.tasks.clear()
+        self.label_map.clear()
 
     @staticmethod
     def find_cycle(decomp: DecomposeResponse) -> list[str] | None:
@@ -123,10 +128,12 @@ class DependencyManager:
 
         return True
 
-    def mark_dispatched(self, task_uuid: UUID) -> None:
+    def mark_dispatched(self, task_uuid: UUID, agent_id: str | None = None) -> None:
         task = self.tasks.get(task_uuid)
         if task and task.status != TaskLifecycleStatus.COMPLETED:
             task.status = TaskLifecycleStatus.DISPATCHED
+            if agent_id:
+                task.assigned_agent = agent_id
 
     def mark_failed(self, task_uuid: UUID) -> None:
         """A failed task never unblocks the tasks that depend on it."""
