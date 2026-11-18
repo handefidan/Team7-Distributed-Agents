@@ -99,9 +99,13 @@ def create_app(settings: AgentSettings | None = None, ollama_transport: httpx.As
             output = response.json().get("response", "")
             results[task.task_id] = TaskResult(task_id=task.task_id, status=ExecutionStatus.COMPLETED, output=output)
         except httpx.HTTPError as exc:
-            results[task.task_id] = TaskResult(
-                task_id=task.task_id, status=ExecutionStatus.FAILED, error=f"ollama call failed: {exc!r}"
-            )
+            if os.getenv("AGENT_MOCK", "false").lower() in ("true", "1", "yes"):
+                output = f"// [MOCK OUTPUT - {settings.agent_id}]\n// Task: {task.title} ({task.type})\n// Model: {settings.model}\n\ndef handle_task():\n    # Generated solution for: {task.description[:80]}...\n    return 'Completed successfully by {settings.agent_id}'"
+                results[task.task_id] = TaskResult(task_id=task.task_id, status=ExecutionStatus.COMPLETED, output=output)
+            else:
+                results[task.task_id] = TaskResult(
+                    task_id=task.task_id, status=ExecutionStatus.FAILED, error=f"ollama call failed: {exc!r}"
+                )
         finally:
             queue.remove(task)
 
