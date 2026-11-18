@@ -272,6 +272,8 @@ def create_app(
             "tailscale_ip": current_ip,
             "master_port": port,
             "master_base_url": f"http://{current_ip}:{port}",
+            "ollama_model": OLLAMA_MODEL,
+            "ollama_base_url": OLLAMA_BASE_URL,
             "registered_agents_count": len(agents),
             "total_tasks_count": len(dep_manager.tasks),
             "ready_tasks_count": len(dep_manager.get_ready_tasks()),
@@ -281,6 +283,15 @@ def create_app(
     def list_plan_tasks() -> list[MappedTask]:
         """All tasks in the active decomposed plan with their dependency status."""
         return list(dep_manager.tasks.values())
+
+    @app.get("/api/v1/plan/info")
+    def plan_info():
+        return {
+            "project_title": dep_manager.project_title,
+            "summary": dep_manager.summary,
+            "tasks_count": len(dep_manager.tasks),
+            "is_mock": dep_manager.summary.startswith("Mock decomposition"),
+        }
 
     @app.post("/api/v1/plan/reset", status_code=status.HTTP_200_OK)
     def reset_plan() -> dict[str, str]:

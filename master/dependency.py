@@ -37,10 +37,14 @@ class DependencyManager:
     def __init__(self) -> None:
         self.tasks: dict[UUID, MappedTask] = {}
         self.label_map: dict[str, UUID] = {}
+        self.project_title: str = "Automated Software Project"
+        self.summary: str = ""
 
     def reset(self) -> None:
         self.tasks.clear()
         self.label_map.clear()
+        self.project_title = "Automated Software Project"
+        self.summary = ""
 
     @staticmethod
     def find_cycle(decomp: DecomposeResponse) -> list[str] | None:
@@ -74,6 +78,8 @@ class DependencyManager:
         cycle = self.find_cycle(decomp)
         if cycle:
             raise CyclicDependencyError("dependency cycle: " + " -> ".join(cycle))
+        self.project_title = decomp.project_title
+        self.summary = decomp.summary
         mapped_list: list[MappedTask] = []
 
         for subtask in decomp.tasks:

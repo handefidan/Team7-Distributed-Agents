@@ -9,6 +9,7 @@ LLM API — no external API key required.
 """
 
 import json
+import logging
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError, model_validator
@@ -103,12 +104,16 @@ def mock_decomposition(requirement_text: str) -> DecomposeResponse:
     )
 
 
+logger = logging.getLogger("master.decompose")
+
+
 async def decompose_requirement(
     requirement_text: str, client: httpx.AsyncClient, model: str
 ) -> DecomposeResponse:
     """Ask the local Ollama model to decompose `requirement_text`, falling
     back to a fixed mock if it's unreachable or answers with something
     that doesn't fit the schema."""
+    logger.info("Decomposing requirement using Ollama model '%s'...", model)
     try:
         response = await client.post(
             "/api/generate",
@@ -122,6 +127,19 @@ async def decompose_requirement(
         )
         response.raise_for_status()
         raw = response.json().get("response", "")
-        return DecomposeResponse.model_validate(json.loads(raw))
-    except (httpx.HTTPError, json.JSONDecodeError, ValidationError):
+        data = json.loads(raw)
+        result = DecomposeResponse.model_validate(data)
+        logger.info(
+            "Ollama model '%s' successfully generated project '%s' with %d subtasks!",
+            model,
+            result.project_title,
+            len(result.tasks),
+        )
+        return result
+    except Exception as exc:
+        logger.warning(
+            "Ollama call failed (%s: %s). Falling back to mock decomposition.",
+            type(exc).__name__,
+            exc,
+        )
         return mock_decomposition(requirement_text)

@@ -750,7 +750,8 @@
         const res = await fetch(`${API_BASE}/api/v1/system/info`);
         if (!res.ok) throw new Error("API not ok");
         const data = await res.json();
-        document.getElementById("masterIpLabel").innerText = `Master IP: ${data.tailscale_ip}:${data.master_port}`;
+        const modelName = data.ollama_model || 'llama3.2';
+        document.getElementById("masterIpLabel").innerText = `Master IP: ${data.tailscale_ip}:${data.master_port} [LLM: ${modelName}]`;
         document.getElementById("serverDot").className = "status-dot";
       } catch (err) {
         document.getElementById("masterIpLabel").innerText = `Master Bağlantısı Kesildi (${API_BASE})`;
@@ -942,6 +943,22 @@
         }
 
         const tasks = await res.json();
+        
+        // Plan info
+        let isMock = false;
+        try {
+          const infoRes = await fetch(`${API_BASE}/api/v1/plan/info`);
+          if (infoRes.ok) {
+            const pInfo = await infoRes.json();
+            isMock = pInfo.is_mock;
+            if (isMock) {
+              log(`[Fallback Modu] Ollama yanıt vermediği için varsayılan alt görevler yüklendi.`, "warn");
+            } else {
+              log(`🎉 [Ollama Başarılı] Model projeyi '${pInfo.project_title}' olarak ayrıştırdı!`, "success");
+            }
+          }
+        } catch (e) {}
+
         log(`Başarılı! ${tasks.length} alt görev ve bağımlılık grafiği oluşturuldu.`, "success");
         document.getElementById("decompStatusLabel").innerText = `Tamamlandı (${tasks.length} Görev)`;
         loadPlanTasks();
@@ -987,6 +1004,20 @@
         progressBadge.innerText = `${completedCount}/${planTasks.length} Tamamlandı (%${percent})`;
         progressBadge.className = percent === 100 ? "badge badge-completed" : "badge badge-pending";
         progressBar.style.width = `${percent}%`;
+
+        // Check project title and origin (Ollama vs mock)
+        try {
+          const infoRes = await fetch(`${API_BASE}/api/v1/plan/info`);
+          if (infoRes.ok) {
+            const pInfo = await infoRes.json();
+            if (pInfo.project_title) {
+              const badge = pInfo.is_mock 
+                ? '<span class="badge badge-blocked">Mock Fallback</span>' 
+                : '<span class="badge badge-completed">🟢 Canlı Ollama</span>';
+              document.getElementById("decompStatusLabel").innerHTML = `${pInfo.project_title} ${badge}`;
+            }
+          }
+        } catch (e) {}
 
         // Map labels for dependencies
         const uuidToLabel = {};
