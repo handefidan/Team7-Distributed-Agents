@@ -91,6 +91,9 @@ Returns `agent_id`, `model`, `status` (`idle`/`busy`), `queue_size`,
 | `GET /api/v1/plan/tasks/{task_id}/spec` | Ready-to-send `TaskSpec` of a mapped task (Sprint 3) |
 | `POST /api/v1/tasks/{task_id}/complete` | Mark a task completed, optional `{"output": "..."}`; releases dependents (Sprint 3) |
 | `POST /api/v1/tasks/{task_id}/fail` | Mark a task failed; dependents stay blocked (Sprint 3) |
+| `POST /api/v1/plan/run` | Run the whole plan: send ready tasks, collect results, recover from failures (Sprint 4) |
+| `GET /api/v1/plan/run` | Summary of the last plan run (Sprint 4) |
+| `GET /api/v1/plan/tasks` | Every plan task with status, output and attempt history (Sprint 4) |
 | `GET /api/v1/tasks` | List all dispatch records |
 | `GET /api/v1/tasks/{task_id}` | Get one dispatch record |
 
@@ -245,6 +248,53 @@ Returns a `TaskSpec` with `task_id` = the plan UUID, `depends_on`, `required_cap
 | `error` | string \| null | Reason when `failed` (e.g. Ollama not reachable) |
 
 `404` if the agent never received that `task_id`.
+
+## Sprint 4 endpoints: running a plan
+
+Sequence and diagram: [message-flow.md](message-flow.md). Failure handling: [../error-recovery.md](../error-recovery.md).
+
+### `POST /api/v1/plan/run`
+
+Runs every task of the plan created with `decompose_and_map`, in dependency order (independent tasks at the same time).
+Query parameter `wait` (default `false`): `true` answers when the run is finished; `false` starts the run and answers at once.
+
+Response `200` — `RunReport`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `finished` | bool | `false` while the run is in progress (only with `wait=false`) |
+| `completed` | string[] | Labels of completed tasks (`T1`, …) |
+| `failed` | string[] | Labels of tasks that failed after the recovery rules |
+| `blocked` | string[] | Labels never started because a task they depend on failed |
+
+| HTTP | When |
+|---|---|
+| 200 | Run started (`wait=false`) or finished (`wait=true`) |
+| 400 | No plan yet (`decompose_and_map` was not called) |
+| 409 | A run is already in progress |
+
+Calling it again retries failed tasks; completed tasks are not run again.
+
+### `GET /api/v1/plan/run`
+
+Returns the `RunReport` of the last run (`finished: false` while running or before the first run).
+
+### `GET /api/v1/plan/tasks`
+
+List of `MappedTask`. New fields since Sprint 3:
+
+| Field | Type | Notes |
+|---|---|---|
+| `output` | string \| null | Result text of a completed task |
+| `attempts` | Attempt[] | One entry per try: `agent_id`, `outcome`, `detail` |
+
+`Attempt.outcome` is one of `completed`, `rejected`, `unreachable`, `agent_failed`, `timeout`, `no_agent`, `busy`.
+
+### Agent: resending a task
+
+`POST /agent/v1/tasks` with a `task_id` the agent already knows returns the first acknowledgement with
+`duplicate: true`. Exception: if the earlier run of that task `failed`, or the task was rejected, the agent
+treats it as new and runs it again.
 
 ## Versioning
 

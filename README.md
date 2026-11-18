@@ -3,6 +3,8 @@
 A distributed multi-agent system where a central Master Agent decomposes software requirements into typed subtasks, dynamically evaluates candidate worker nodes via capability benchmarking, dispatches tasks over a secure private network (Tailscale), and receives non-blocking acknowledgements while workers execute prompts locally via Ollama.
 
 - **API Contract Specification:** [`docs/api/task-dispatch-contract.md`](docs/api/task-dispatch-contract.md)
+- **Error Recovery Rules:** [`docs/error-recovery.md`](docs/error-recovery.md)
+- **Demo Scenario:** [`docs/demo-scenario.md`](docs/demo-scenario.md)
 - **Master ↔ Agent Message Flow:** [`docs/api/message-flow.md`](docs/api/message-flow.md)
 - **Model Evaluation Criteria:** [`docs/model-evaluation-criteria.md`](docs/model-evaluation-criteria.md)
 - **Architecture Overview:** [`docs/architecture.md`](docs/architecture.md)
@@ -18,9 +20,10 @@ master/decompose.py       Requirement -> subtasks breakdown (Sprint 1)
 master/classify.py        Fixed capability threshold mapping per task type (Sprint 2)
 master/selection.py       Deterministic capability-based agent selection algorithm (Sprint 2)
 master/dependency.py      Label-to-UUID mapping & prerequisite execution guardrails (Sprint 3)
+master/orchestrator.py    Runs a whole plan: result collection, retries on other agents (Sprint 4)
 master/main.py            Master Agent API gateway (port 8000)
 agent/main.py             Worker Agent execution API & Ollama engine (port 8001+)
-tests/                    Pytest suite (39 unit and integration tests)
+tests/                    Pytest suite (unit and integration tests)
 docs/                     Architecture diagrams, specifications, and sprint reports
 ```
 
@@ -58,6 +61,9 @@ All Master and Worker endpoints bind strictly to the private Tailscale interface
 | `GET`  | `/api/v1/plan/tasks/{task_id}/spec` | Ready-to-send `TaskSpec` (UUID dependencies, outputs of finished prerequisites in `context`). |
 | `POST` | `/api/v1/tasks/{task_id}/complete` | Marks a task as completed (optional `{"output": "..."}`) and unblocks downstream tasks waiting on it. |
 | `POST` | `/api/v1/tasks/{task_id}/fail` | Marks a task as failed; tasks depending on it stay blocked. |
+| `POST` | `/api/v1/plan/run` | Runs the whole plan: sends ready tasks, collects results, passes outputs on, retries failed tasks on other agents (`?wait=true` waits until done). |
+| `GET`  | `/api/v1/plan/run` | Summary of the last plan run (`completed`, `failed`, `blocked`). |
+| `GET`  | `/api/v1/plan/tasks` | Every plan task with status, output and attempt history. |
 | `GET`  | `/api/v1/tasks` | Lists all dispatch history records and round-trip execution logs. |
 | `GET`  | `/api/v1/tasks/{task_id}` | Retrieves dispatch status, errors, and worker acknowledgement for a specific task. |
 
@@ -96,6 +102,7 @@ AGENT_ID=agent-a AGENT_MODEL=llama3.2:3b AGENT_SUPPORTED_TYPES=backend,testing \
 python -m master.main
 ```
 *Master Configuration Variables:*
+- Plan run limits (`MAX_TASK_ATTEMPTS`, `BUSY_WAIT_SECONDS`, `MAX_BUSY_WAIT_SECONDS`, `RESULT_POLL_INTERVAL_SECONDS`, `TASK_RESULT_TIMEOUT_SECONDS`): see [`docs/error-recovery.md`](docs/error-recovery.md).
 - `MASTER_PORT`: Gateway port (default `8000`).
 - `AGENT_TIMEOUT_SECONDS`: Maximum latency tolerated for worker task ACK (default `5` seconds).
 - `AGENT_HEALTH_TIMEOUT_SECONDS`: Maximum wait for an agent's health check during selection (default `2` seconds).
@@ -167,4 +174,5 @@ python -m pytest -q
 - `tests/test_decompose.py` (5 tests): Requirement parsing, fallback handling on model error, empty payload rejection.
 - `tests/test_dependency.py` (14 tests): Label-to-UUID mapping, lifecycle (`PENDING`/`BLOCKED`/`DISPATCHED`/`COMPLETED`/`FAILED`), cycle detection, ready-task ordering, dependency outputs in `context`, API-level dependency flow.
 - `tests/test_dispatch.py` (13 tests): SLA acknowledgement (<= 200 ms), idempotency, queue overflow, network timeouts (504), unreachable hosts (503), health status.
+- `tests/test_orchestrator.py` (20 tests): whole-plan runs against real agent apps, dependency order, outputs passed on, every recovery rule (retry on another agent, busy waiting, timeout, give up), resending a failed task.
 - `tests/test_selection.py` (11 tests): Capability-based routing algorithm, threshold filtering, score tie-breaking, skipping busy and offline agents, 404/503 handling, loading `agents.json` at startup.
