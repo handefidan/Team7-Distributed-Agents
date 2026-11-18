@@ -6,6 +6,7 @@ TAILSCALE_IP env var) so the API is only reachable over the tailnet.
 Run:  python -m master.main
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -21,6 +22,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from master.decompose import DecomposeResponse, decompose_requirement
 from master.dependency import CyclicDependencyError, DependencyManager, MappedTask
+from master.orchestrator import DispatchResult, RunReport, RunSettings, run_plan
 from master.selection import AgentStatus, fetch_statuses, qualifying_agents
 from shared.schemas import (
     AckStatus,
@@ -40,6 +42,18 @@ AGENTS_FILE = os.getenv(
 OLLAMA_BASE_URL = os.getenv("MASTER_OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("MASTER_OLLAMA_MODEL", "llama3.2")
 OLLAMA_TIMEOUT_SECONDS = float(os.getenv("MASTER_OLLAMA_TIMEOUT_SECONDS", "120"))
+
+
+def run_settings_from_env() -> RunSettings:
+    """Plan-run limits (see docs/error-recovery.md); every value can be set with an env var."""
+    d = RunSettings()
+    return RunSettings(
+        max_attempts=int(os.getenv("MAX_TASK_ATTEMPTS", d.max_attempts)),
+        busy_wait_seconds=float(os.getenv("BUSY_WAIT_SECONDS", d.busy_wait_seconds)),
+        max_busy_wait_seconds=float(os.getenv("MAX_BUSY_WAIT_SECONDS", d.max_busy_wait_seconds)),
+        poll_interval_seconds=float(os.getenv("RESULT_POLL_INTERVAL_SECONDS", d.poll_interval_seconds)),
+        result_timeout_seconds=float(os.getenv("TASK_RESULT_TIMEOUT_SECONDS", d.result_timeout_seconds)),
+    )
 
 logger = logging.getLogger("master")
 
@@ -70,6 +84,7 @@ def create_app(
     transport: httpx.AsyncBaseTransport | None = None,
     ollama_transport: httpx.AsyncBaseTransport | None = None,
     agents_file: str | Path | None = AGENTS_FILE,
+    run_settings: RunSettings | None = None,
 ) -> FastAPI:
     """`transport` lets tests route agent calls in-process; `ollama_transport`
     does the same for the local Ollama call used to decompose requirements.
@@ -180,15 +195,9 @@ def create_app(
             )
         return await dispatch_to_agent(agent, spec)
 
-    @app.post("/api/v1/tasks/dispatch", response_model=DispatchRecord)
-    async def dispatch_task(spec: TaskSpec) -> DispatchRecord:
-        """Send the task to the best-scoring agent that meets its
-        required_capabilities and is currently idle (master/selection.py)."""
-        if spec.task_id in dep_manager.tasks and not dep_manager.is_ready_for_dispatch(spec.task_id):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"Task '{spec.task_id}' cannot be dispatched yet because its prerequisite dependencies are not completed.",
-            )
+    async def select_and_dispatch(spec: TaskSpec, exclude: frozenset[str] | set[str] = frozenset()) -> DispatchRecord:
+        """Send the task to the best-scoring agent that meets its required_capabilities
+        and is currently idle (master/selection.py). Agents in `exclude` are skipped."""
         if not agents:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no agents are registered")
 
@@ -198,6 +207,12 @@ def create_app(
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND,
                 f"no registered agent meets the required capabilities {required}",
+            )
+        candidates = [a for a in candidates if a.agent_id not in exclude]
+        if not candidates:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                f"no other agent left to try (already tried: {', '.join(sorted(exclude))})",
             )
 
         statuses = await fetch_statuses(app.state.http, candidates, AGENT_HEALTH_TIMEOUT_SECONDS)
@@ -209,6 +224,17 @@ def create_app(
                 f"every agent that meets the required capabilities is busy or offline: {summary}",
             )
         return await dispatch_to_agent(chosen, spec)
+
+    @app.post("/api/v1/tasks/dispatch", response_model=DispatchRecord)
+    async def dispatch_task(spec: TaskSpec) -> DispatchRecord:
+        """Send the task to the best-scoring agent that meets its
+        required_capabilities and is currently idle (master/selection.py)."""
+        if spec.task_id in dep_manager.tasks and not dep_manager.is_ready_for_dispatch(spec.task_id):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Task '{spec.task_id}' cannot be dispatched yet because its prerequisite dependencies are not completed.",
+            )
+        return await select_and_dispatch(spec)
 
     class CompletePayload(BaseModel):
         output: str | None = None
@@ -237,6 +263,72 @@ def create_app(
         dep_manager.mark_failed(task_id)
         return {"task_id": str(task_id), "status": "failed"}
     
+    # ---- running a whole plan (Sprint 4 Week 7) ----
+    settings = run_settings or run_settings_from_env()
+    run_state: dict = {"task": None, "report": RunReport()}
+
+    async def send(spec: TaskSpec, exclude: set[str]) -> DispatchResult:
+        """Adapter for master/orchestrator.py: turns the dispatch outcome into a DispatchResult."""
+        try:
+            record = await select_and_dispatch(spec, exclude)
+        except HTTPException as exc:
+            if isinstance(exc.detail, dict):  # the chosen agent failed (unreachable, timeout, bad answer)
+                failed = dispatches.get(spec.task_id)
+                agent = agents.get(failed.task.agent_id) if failed else None
+                return DispatchResult("unreachable", agent, exc.detail.get("error"))
+            if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+                return DispatchResult("all_busy", detail=str(exc.detail))
+            return DispatchResult("no_agent", detail=str(exc.detail))
+        agent = agents[record.task.agent_id]
+        if record.status == DispatchStatus.REJECTED:
+            return DispatchResult("rejected", agent, record.acknowledgement.reason if record.acknowledgement else None)
+        return DispatchResult("accepted", agent)
+
+    async def fetch_result(agent: AgentRegistration, task_id: UUID) -> dict | None:
+        try:
+            response = await app.state.http.get(
+                f"{str(agent.base_url).rstrip('/')}/agent/v1/tasks/{task_id}/result",
+                timeout=AGENT_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            return response.json()
+        except (httpx.HTTPError, ValueError):
+            return None
+
+    async def run_and_store() -> RunReport:
+        try:
+            report = await run_plan(dep_manager, send, fetch_result, settings)
+        finally:
+            run_state["task"] = None
+        run_state["report"] = report
+        return report
+
+    @app.post("/api/v1/plan/run", response_model=RunReport)
+    async def run_plan_endpoint(wait: bool = False) -> RunReport:
+        """Run the decomposed plan: send every ready task, collect results, release the next tasks,
+        and recover from failures (docs/error-recovery.md). With `wait=true` the call returns when
+        the whole plan is done; otherwise it starts the run and returns at once (watch /plan/tasks)."""
+        if run_state["task"] is not None:
+            raise HTTPException(status.HTTP_409_CONFLICT, "the plan is already running")
+        if not dep_manager.tasks:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "no plan yet: call decompose_and_map first")
+        run_state["report"] = RunReport()
+        if wait:
+            run_state["task"] = asyncio.current_task()
+            return await run_and_store()
+        run_state["task"] = asyncio.create_task(run_and_store())
+        return run_state["report"]
+
+    @app.get("/api/v1/plan/run", response_model=RunReport)
+    def plan_run_status() -> RunReport:
+        """Result of the last plan run (`finished` is false while a run is in progress or none started)."""
+        return run_state["report"]
+
+    @app.get("/api/v1/plan/tasks", response_model=list[MappedTask])
+    def plan_tasks() -> list[MappedTask]:
+        """Every task of the plan with its status, output and attempt history."""
+        return list(dep_manager.tasks.values())
+
     @app.get("/api/v1/tasks", response_model=list[DispatchRecord])
     def list_tasks() -> list[DispatchRecord]:
         return list(dispatches.values())

@@ -20,6 +20,15 @@ class TaskLifecycleStatus(str, Enum):
     FAILED = "failed"
 
 
+class Attempt(BaseModel):
+    """One try to run a task on an agent (kept so the recovery path can be inspected)."""
+
+    agent_id: str | None = None
+    # completed | rejected | unreachable | agent_failed | timeout | no_agent | busy
+    outcome: str
+    detail: str | None = None
+
+
 class MappedTask(BaseModel):
     task_uuid: UUID = Field(default_factory=uuid4)
     label: str  # e.g., "T1"
@@ -30,6 +39,7 @@ class MappedTask(BaseModel):
     required_capabilities: CapabilityScores = Field(default_factory=CapabilityScores)
     status: TaskLifecycleStatus = TaskLifecycleStatus.PENDING
     output: str | None = None  # result text, set when the task is completed
+    attempts: list[Attempt] = Field(default_factory=list)
 
 
 class DependencyManager:
@@ -127,6 +137,31 @@ class DependencyManager:
         task = self.tasks.get(task_uuid)
         if task and task.status != TaskLifecycleStatus.COMPLETED:
             task.status = TaskLifecycleStatus.DISPATCHED
+
+    def record_attempt(self, task_uuid: UUID, agent_id: str | None, outcome: str, detail: str | None = None) -> None:
+        task = self.tasks.get(task_uuid)
+        if task:
+            task.attempts.append(Attempt(agent_id=agent_id, outcome=outcome, detail=detail))
+
+    def mark_retry(self, task_uuid: UUID) -> None:
+        """A dispatched task whose attempt failed goes back to pending so it can be sent again."""
+        task = self.tasks.get(task_uuid)
+        if task and task.status == TaskLifecycleStatus.DISPATCHED:
+            task.status = TaskLifecycleStatus.PENDING
+
+    def reset_failed(self) -> int:
+        """Give every failed task a fresh start (used when a plan is run again). Returns how many."""
+        count = 0
+        for task in self.tasks.values():
+            if task.status == TaskLifecycleStatus.FAILED:
+                task.status = TaskLifecycleStatus.PENDING
+                count += 1
+        for task in self.tasks.values():
+            if task.status == TaskLifecycleStatus.PENDING and any(
+                self.tasks[d].status != TaskLifecycleStatus.COMPLETED for d in task.dependency_uuids if d in self.tasks
+            ):
+                task.status = TaskLifecycleStatus.BLOCKED
+        return count
 
     def mark_failed(self, task_uuid: UUID) -> None:
         """A failed task never unblocks the tasks that depend on it."""

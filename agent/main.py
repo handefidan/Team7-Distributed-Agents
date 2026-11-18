@@ -107,7 +107,10 @@ def create_app(settings: AgentSettings | None = None, ollama_transport: httpx.As
 
     @app.post("/agent/v1/tasks", response_model=TaskAcknowledgement)
     def receive_task(task: TaskMessage, background_tasks: BackgroundTasks) -> TaskAcknowledgement:
-        if task.task_id in acks:
+        previous = results.get(task.task_id)
+        # Same task_id again = same task, answered from the first ack. A task that failed (or was
+        # rejected earlier) may be sent again, so the master can retry it after a fix.
+        if task.task_id in acks and previous is not None and previous.status != ExecutionStatus.FAILED:
             return acks[task.task_id].model_copy(update={"duplicate": True})
 
         reason = None
