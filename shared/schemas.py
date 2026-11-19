@@ -25,6 +25,7 @@ class TaskType(StrEnum):
     TESTING = "testing"
     INTEGRATION = "integration"
     DOCUMENTATION = "documentation"
+    REVIEW = "review"
 
 
 class TaskPriority(StrEnum):
@@ -117,3 +118,14 @@ class DispatchRecord(BaseModel):
     acknowledgement: TaskAcknowledgement | None = None
     error: str | None = None
     round_trip_ms: float | None = None
+
+class ReviewDecision(StrEnum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class ReviewOutput(BaseModel):
+    """Structured output returned by a Review Agent."""
+
+    decision: ReviewDecision
+    reason: str = Field(min_length=1, description="Explanation for approval or required fixes.")

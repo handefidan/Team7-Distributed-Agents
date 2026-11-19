@@ -12,7 +12,7 @@ Run:
   ollama serve &
   AGENT_ID=agent-a AGENT_MODEL=llama3 python -m agent.main
 """
-
+import json
 import os
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -20,15 +20,18 @@ from uuid import UUID
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from shared.schemas import (
     AckStatus,
+    CapabilityScores,
+    ReviewOutput,
     TaskAcknowledgement,
     TaskMessage,
     TaskType,
 )
 
+REVIEW_AGENT_CAPABILITIES = CapabilityScores(coding=75, reasoning=90, context=80)
 
 @dataclass
 class AgentSettings:
@@ -66,7 +69,46 @@ class TaskResult(BaseModel):
     error: str | None = None
 
 
+def _build_review_prompt(task: TaskMessage) -> str:
+    """Prompt specifically engineered for review tasks to enforce strict JSON output."""
+    artifact = task.context.get("artifact") or task.context.get("output") or ""
+    return (
+        "You are a strict technical Review Agent. Evaluate the following task deliverable.\n"
+        f"Task Title: {task.title}\n"
+        f"Requirements / Description: {task.description}\n"
+        f"Submitted Output to Review:\n{artifact}\n\n"
+        "Respond ONLY with a valid JSON object using this exact schema (no markdown, no extra text):\n"
+        '{"decision": "approved" or "rejected", "reason": "clear explanation or fix instructions"}'
+    )
+
+
+def _parse_and_validate_review(raw_output: str) -> str:
+    """Validate review output; raise ValueError if empty, malformed JSON, or invalid schema."""
+    cleaned = raw_output.strip()
+    if not cleaned:
+        raise ValueError("Review model returned empty output")
+
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if len(lines) >= 3:
+            cleaned = "\n".join(lines[1:-1]).strip()
+
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Review model returned malformed JSON: {exc}") from exc
+
+    try:
+        validated = ReviewOutput.model_validate(data)
+    except ValidationError as exc:
+        raise ValueError(f"Review output failed schema validation: {exc}") from exc
+
+    return validated.model_dump_json()
+
+
 def _build_prompt(task: TaskMessage) -> str:
+    if task.type == TaskType.REVIEW:
+        return _build_review_prompt(task)
     prompt = f"Task type: {task.type}\nTitle: {task.title}\nDescription: {task.description}"
     if task.context:
         prompt += f"\nContext: {task.context}"
@@ -97,7 +139,25 @@ def create_app(settings: AgentSettings | None = None, ollama_transport: httpx.As
             )
             response.raise_for_status()
             output = response.json().get("response", "")
+
+            if not output or not output.strip():
+                results[task.task_id] = TaskResult(
+                    task_id=task.task_id,
+                    status=ExecutionStatus.FAILED,
+                    error="model returned empty output",
+                )
+                return
+
+            if task.type == TaskType.REVIEW:
+                output = _parse_and_validate_review(output)
+
             results[task.task_id] = TaskResult(task_id=task.task_id, status=ExecutionStatus.COMPLETED, output=output)
+        except ValueError as exc:
+            results[task.task_id] = TaskResult(
+                task_id=task.task_id,
+                status=ExecutionStatus.FAILED,
+                error=str(exc),
+            )
         except httpx.HTTPError as exc:
             results[task.task_id] = TaskResult(
                 task_id=task.task_id, status=ExecutionStatus.FAILED, error=f"ollama call failed: {exc!r}"
