@@ -4,6 +4,7 @@ Keeping the API off 0.0.0.0 means it's only reachable over the tailnet,
 not the local LAN or the open internet.
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -44,3 +45,27 @@ def get_tailscale_ip(env_var: str = "TAILSCALE_IP") -> str:
             "is Tailscale running and logged in?"
         )
     return result.stdout.strip().splitlines()[0]
+
+
+def get_tailscale_peers() -> list[dict[str, str]]:
+    """Return online Tailscale peers as [{"hostname": ..., "ip": ...}]. Empty if unavailable."""
+    tailscale = shutil.which("tailscale")
+    if tailscale is None:
+        return []
+    try:
+        result = subprocess.run([tailscale, "status", "--json"], capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            return []
+        data = json.loads(result.stdout)
+    except (subprocess.TimeoutExpired, OSError, ValueError):
+        return []
+
+    peers: list[dict[str, str]] = []
+    for peer in (data.get("Peer") or {}).values():
+        if not peer.get("Online"):
+            continue
+        ips = [ip for ip in (peer.get("TailscaleIPs") or []) if ":" not in ip]
+        if ips:
+            name = (peer.get("HostName") or peer.get("DNSName", "").split(".")[0] or ips[0]).strip()
+            peers.append({"hostname": name, "ip": ips[0]})
+    return peers

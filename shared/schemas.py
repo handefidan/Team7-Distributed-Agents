@@ -25,6 +25,7 @@ class TaskType(StrEnum):
     TESTING = "testing"
     INTEGRATION = "integration"
     DOCUMENTATION = "documentation"
+    REVIEW = "review"
 
 
 class TaskPriority(StrEnum):
@@ -39,6 +40,16 @@ class CapabilityScores(BaseModel):
     coding: int = Field(default=50, ge=0, le=100)
     reasoning: int = Field(default=50, ge=0, le=100)
     context: int = Field(default=50, ge=0, le=100)
+
+
+def infer_capabilities(model: str) -> CapabilityScores:
+    """Estimate default capability scores from an Ollama model name."""
+    name = model.lower()
+    if any(k in name for k in ("coder", "code", "qwen")):
+        return CapabilityScores(coding=92, reasoning=82, context=80)
+    if any(k in name for k in ("r1", "deepseek", "gemma", "phi", "mistral")):
+        return CapabilityScores(coding=80, reasoning=88, context=84)
+    return CapabilityScores(coding=82, reasoning=82, context=80)
 
 
 class TaskSpec(BaseModel):
@@ -117,3 +128,14 @@ class DispatchRecord(BaseModel):
     acknowledgement: TaskAcknowledgement | None = None
     error: str | None = None
     round_trip_ms: float | None = None
+
+class ReviewDecision(StrEnum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class ReviewOutput(BaseModel):
+    """Structured output returned by a Review Agent."""
+
+    decision: ReviewDecision
+    reason: str = Field(min_length=1, description="Explanation for approval or required fixes.")

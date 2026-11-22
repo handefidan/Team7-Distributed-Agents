@@ -34,9 +34,17 @@ Requirements:
 - Return ONLY valid JSON adhering strictly to the schema.
 """
 
+_FALLBACK_SPECS = [
+    ("T1", "Database Schema Design", "database", "Design relational tables, schemas, and migrations.", (70, 85, 70), []),
+    ("T2", "Backend API Services", "backend", "Implement authentication and core business REST endpoints.", (90, 80, 85), ["T1"]),
+    ("T3", "Frontend UI Components", "frontend", "Build responsive user views, search forms, and interaction modals.", (85, 70, 75), ["T2"]),
+    ("T4", "Unit and Integration Testing", "test", "Create automated test suites and validation mocks.", (80, 90, 80), ["T3"]),
+    ("T5", "API & System Documentation", "docs", "Generate OpenAPI specifications and developer setup guides.", (60, 75, 80), ["T2"]),
+]
+
+
 def decompose_requirement(requirement_text: str) -> dict:
     try:
-        # Call the local Ollama server (running at http://127.0.0.1:11434)
         response = ollama.chat(
             model="llama3.2",
             messages=[
@@ -55,44 +63,13 @@ def decompose_requirement(requirement_text: str) -> dict:
             "summary": "Local Ollama fallback mode.",
             "tasks": [
                 {
-                    "task_id": "T1",
-                    "title": "Database Schema Design",
-                    "category": "database",
-                    "description": "Design relational tables, schemas, and migrations.",
-                    "required_capabilities": {"coding": 70, "reasoning": 85, "context": 70},
-                    "dependencies": []
-                },
-                {
-                    "task_id": "T2",
-                    "title": "Backend API Services",
-                    "category": "backend",
-                    "description": "Implement authentication and core business REST endpoints.",
-                    "required_capabilities": {"coding": 90, "reasoning": 80, "context": 85},
-                    "dependencies": ["T1"]
-                },
-                {
-                    "task_id": "T3",
-                    "title": "Frontend UI Components",
-                    "category": "frontend",
-                    "description": "Build responsive user views, search forms, and interaction modals.",
-                    "required_capabilities": {"coding": 85, "reasoning": 70, "context": 75},
-                    "dependencies": ["T2"]
-                },
-                {
-                    "task_id": "T4",
-                    "title": "Unit and Integration Testing",
-                    "category": "test",
-                    "description": "Create automated test suites and validation mocks.",
-                    "required_capabilities": {"coding": 80, "reasoning": 90, "context": 80},
-                    "dependencies": ["T3"]
-                },
-                {
-                    "task_id": "T5",
-                    "title": "API & System Documentation",
-                    "category": "docs",
-                    "description": "Generate OpenAPI specifications and developer setup guides.",
-                    "required_capabilities": {"coding": 60, "reasoning": 75, "context": 80},
-                    "dependencies": ["T2"]
+                    "task_id": tid,
+                    "title": title,
+                    "category": cat,
+                    "description": desc,
+                    "required_capabilities": {"coding": c, "reasoning": r, "context": x},
+                    "dependencies": deps,
                 }
-            ]
+                for tid, title, cat, desc, (c, r, x), deps in _FALLBACK_SPECS
+            ],
         }

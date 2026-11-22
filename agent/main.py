@@ -12,23 +12,30 @@ Run:
   ollama serve &
   AGENT_ID=agent-a AGENT_MODEL=llama3 python -m agent.main
 """
-
+import json
+import logging
 import os
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import StrEnum
 from uuid import UUID
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from shared.schemas import (
     AckStatus,
+    CapabilityScores,
+    ReviewOutput,
     TaskAcknowledgement,
     TaskMessage,
     TaskType,
+    infer_capabilities,
 )
 
+logger = logging.getLogger("agent")
+REVIEW_AGENT_CAPABILITIES = CapabilityScores(coding=75, reasoning=90, context=80)
 
 @dataclass
 class AgentSettings:
@@ -38,6 +45,8 @@ class AgentSettings:
     max_queue: int = 5
     ollama_base_url: str = "http://localhost:11434"
     ollama_timeout_seconds: float = 120.0
+    master_url: str | None = None
+    agent_port: int = 8001
 
     @classmethod
     def from_env(cls) -> "AgentSettings":
@@ -49,6 +58,8 @@ class AgentSettings:
             max_queue=int(os.getenv("AGENT_MAX_QUEUE", cls.max_queue)),
             ollama_base_url=os.getenv("OLLAMA_BASE_URL", cls.ollama_base_url),
             ollama_timeout_seconds=float(os.getenv("OLLAMA_TIMEOUT_SECONDS", cls.ollama_timeout_seconds)),
+            master_url=os.getenv("MASTER_URL") or None,
+            agent_port=int(os.getenv("AGENT_PORT", cls.agent_port)),
         )
 
 
@@ -66,14 +77,57 @@ class TaskResult(BaseModel):
     error: str | None = None
 
 
+def _build_review_prompt(task: TaskMessage) -> str:
+    """Prompt specifically engineered for review tasks to enforce strict JSON output."""
+    artifact = task.context.get("artifact") or task.context.get("output") or ""
+    return (
+        "You are a strict technical Review Agent. Evaluate the following task deliverable.\n"
+        f"Task Title: {task.title}\n"
+        f"Requirements / Description: {task.description}\n"
+        f"Submitted Output to Review:\n{artifact}\n\n"
+        "Respond ONLY with a valid JSON object using this exact schema (no markdown, no extra text):\n"
+        '{"decision": "approved" or "rejected", "reason": "clear explanation or fix instructions"}'
+    )
+
+
+def _parse_and_validate_review(raw_output: str) -> str:
+    """Validate review output; raise ValueError if empty, malformed JSON, or invalid schema."""
+    cleaned = raw_output.strip()
+    if not cleaned:
+        raise ValueError("Review model returned empty output")
+
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if len(lines) >= 3:
+            cleaned = "\n".join(lines[1:-1]).strip()
+
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Review model returned malformed JSON: {exc}") from exc
+
+    try:
+        validated = ReviewOutput.model_validate(data)
+    except ValidationError as exc:
+        raise ValueError(f"Review output failed schema validation: {exc}") from exc
+
+    return validated.model_dump_json()
+
+
 def _build_prompt(task: TaskMessage) -> str:
+    if task.type == TaskType.REVIEW:
+        return _build_review_prompt(task)
     prompt = f"Task type: {task.type}\nTitle: {task.title}\nDescription: {task.description}"
     if task.context:
         prompt += f"\nContext: {task.context}"
     return prompt
 
 
-def create_app(settings: AgentSettings | None = None, ollama_transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
+def create_app(
+    settings: AgentSettings | None = None,
+    ollama_transport: httpx.AsyncBaseTransport | None = None,
+    master_transport: httpx.AsyncBaseTransport | None = None,
+) -> FastAPI:
     """`ollama_transport` lets tests fake the Ollama server instead of calling a real one."""
 
     settings = settings or AgentSettings.from_env()
@@ -83,7 +137,41 @@ def create_app(settings: AgentSettings | None = None, ollama_transport: httpx.As
         timeout=settings.ollama_timeout_seconds,
     )
 
-    app = FastAPI(title=f"Agent {settings.agent_id}", version="0.3.0")
+    async def list_local_models() -> list[str]:
+        try:
+            resp = await ollama_client.get("/api/tags", timeout=3.0)
+            resp.raise_for_status()
+            return [m["name"] for m in resp.json().get("models", []) if m.get("name")]
+        except Exception:
+            return []
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        if settings.model in ("auto", ""):
+            detected = await list_local_models()
+            if detected:
+                settings.model = detected[0]
+        if settings.master_url:
+            try:
+                from shared.network import get_tailscale_ip
+                host_ip = get_tailscale_ip()
+            except Exception:
+                host_ip = os.getenv("TAILSCALE_IP", "127.0.0.1")
+            payload = {
+                "agent_id": settings.agent_id,
+                "base_url": f"http://{host_ip}:{settings.agent_port}",
+                "model": settings.model,
+                "capabilities": infer_capabilities(settings.model).model_dump(),
+            }
+            try:
+                async with httpx.AsyncClient(transport=master_transport, timeout=5.0) as client:
+                    await client.post(f"{settings.master_url.rstrip('/')}/api/v1/agents", json=payload)
+                logger.info("Auto-registered '%s' (%s) to master %s", settings.agent_id, settings.model, settings.master_url)
+            except Exception as exc:
+                logger.warning("Auto-registration to master %s failed: %s", settings.master_url, exc)
+        yield
+
+    app = FastAPI(title=f"Agent {settings.agent_id}", version="0.3.0", lifespan=lifespan)
     queue: list[TaskMessage] = []
     acks: dict = {}  # task_id -> TaskAcknowledgement
     results: dict[UUID, TaskResult] = {}
@@ -97,10 +185,28 @@ def create_app(settings: AgentSettings | None = None, ollama_transport: httpx.As
             )
             response.raise_for_status()
             output = response.json().get("response", "")
+
+            if not output or not output.strip():
+                results[task.task_id] = TaskResult(
+                    task_id=task.task_id,
+                    status=ExecutionStatus.FAILED,
+                    error="model returned empty output",
+                )
+                return
+
+            if task.type == TaskType.REVIEW:
+                output = _parse_and_validate_review(output)
+
             results[task.task_id] = TaskResult(task_id=task.task_id, status=ExecutionStatus.COMPLETED, output=output)
+        except ValueError as exc:
+            results[task.task_id] = TaskResult(
+                task_id=task.task_id,
+                status=ExecutionStatus.FAILED,
+                error=str(exc),
+            )
         except httpx.HTTPError as exc:
             if os.getenv("AGENT_MOCK", "false").lower() in ("true", "1", "yes"):
-                output = f"// [MOCK OUTPUT - {settings.agent_id}]\n// Task: {task.title} ({task.type})\n// Model: {settings.model}\n\ndef handle_task():\n    # Generated solution for: {task.description[:80]}...\n    return 'Completed successfully by {settings.agent_id}'"
+                output = f"[{settings.agent_id} | {settings.model}] Simulated solution for: {task.title} ({task.type})"
                 results[task.task_id] = TaskResult(task_id=task.task_id, status=ExecutionStatus.COMPLETED, output=output)
             else:
                 results[task.task_id] = TaskResult(
@@ -111,7 +217,10 @@ def create_app(settings: AgentSettings | None = None, ollama_transport: httpx.As
 
     @app.post("/agent/v1/tasks", response_model=TaskAcknowledgement)
     def receive_task(task: TaskMessage, background_tasks: BackgroundTasks) -> TaskAcknowledgement:
-        if task.task_id in acks:
+        previous = results.get(task.task_id)
+        # Same task_id again = same task, answered from the first ack. A task that failed (or was
+        # rejected earlier) may be sent again, so the master can retry it after a fix.
+        if task.task_id in acks and previous is not None and previous.status != ExecutionStatus.FAILED:
             return acks[task.task_id].model_copy(update={"duplicate": True})
 
         reason = None
@@ -148,6 +257,10 @@ def create_app(settings: AgentSettings | None = None, ollama_transport: httpx.As
         if result is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no result for this task_id")
         return result
+
+    @app.get("/agent/v1/models")
+    async def models() -> dict:
+        return {"agent_id": settings.agent_id, "active_model": settings.model, "models": await list_local_models()}
 
     @app.get("/agent/v1/health")
     def health() -> dict:

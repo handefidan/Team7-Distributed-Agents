@@ -3,1285 +3,582 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Team 7 — Dağıtık Çoklu-Ajan (Multi-Agent) Yönetim Konsolu</title>
+  <title>Team 7 — Distributed Multi-Agent Console</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --card-border: #334155;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --primary: #3b82f6;
-      --primary-hover: #2563eb;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --info: #06b6d4;
-      --purple: #8b5cf6;
-      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      --mono: 'Fira Code', monospace;
+      --bg: #0f172a; --card-bg: #1e293b; --card-border: #334155;
+      --text: #f8fafc; --text-muted: #94a3b8; --primary: #3b82f6;
+      --primary-hover: #2563eb; --success: #10b981; --warning: #f59e0b;
+      --danger: #ef4444; --info: #06b6d4; --purple: #8b5cf6;
+      --font: 'Inter', -apple-system, sans-serif; --mono: 'Fira Code', monospace;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: var(--font);
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-      padding: 24px;
+    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.5; padding: 24px; }
+    .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+    header, .card {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 18px 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
-
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-    }
-
-    /* Top Bar */
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 18px 24px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
+    header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 14px; }
     .brand-logo {
-      width: 44px;
-      height: 44px;
-      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      font-weight: bold;
+      width: 42px; height: 42px; background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px;
     }
-    .brand-title h1 {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-    .brand-title p {
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-
+    .brand-title h1 { font-size: 19px; font-weight: 700; }
+    .brand-title p { font-size: 12px; color: var(--text-muted); }
     .network-badge {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: #0f172a;
-      border: 1px solid var(--card-border);
-      padding: 8px 16px;
-      border-radius: 9999px;
-      font-family: var(--mono);
-      font-size: 13px;
+      display: flex; align-items: center; gap: 10px; background: #0f172a;
+      border: 1px solid var(--card-border); padding: 6px 14px; border-radius: 999px;
+      font-family: var(--mono); font-size: 12px;
     }
-    .status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 8px var(--success);
-      animation: pulse 2s infinite;
-    }
-    .status-dot.offline {
-      background: var(--danger);
-      box-shadow: 0 0 8px var(--danger);
-    }
-    @keyframes pulse {
-      0% { opacity: 0.6; }
-      50% { opacity: 1; }
-      100% { opacity: 0.6; }
-    }
-
-    .top-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    /* Grid Layout */
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-    }
-    @media (max-width: 1024px) {
-      .grid-2 { grid-template-columns: 1fr; }
-    }
-
-    /* Card */
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--card-border);
-      padding-bottom: 12px;
-    }
-    .card-title {
-      font-size: 17px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    /* Buttons */
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .status-dot.offline { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+    .top-actions, .row-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 1024px) { .grid-2 { grid-template-columns: 1fr; } }
+    .card { display: flex; flex-direction: column; gap: 14px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--card-border); padding-bottom: 10px; }
+    .card-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
     button, .btn {
-      font-family: var(--font);
-      font-weight: 600;
-      font-size: 13px;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 14px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.15s ease;
-      text-decoration: none;
+      font-family: var(--font); font-weight: 600; font-size: 13px; border: none; border-radius: 6px;
+      padding: 7px 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: 0.15s;
     }
     .btn-primary { background: var(--primary); color: #fff; }
-    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-primary:hover { background: var(--primary-hover); }
     .btn-success { background: var(--success); color: #fff; }
-    .btn-success:hover { filter: brightness(1.1); transform: translateY(-1px); }
     .btn-danger { background: var(--danger); color: #fff; }
-    .btn-danger:hover { filter: brightness(1.1); }
     .btn-secondary { background: #334155; color: #f8fafc; }
-    .btn-secondary:hover { background: #475569; }
     .btn-sm { padding: 4px 10px; font-size: 12px; }
-
-    /* Inputs & Selects */
     input, select, textarea {
-      width: 100%;
-      background: #0f172a;
-      border: 1px solid var(--card-border);
-      border-radius: 6px;
-      color: var(--text);
-      padding: 9px 12px;
-      font-family: var(--font);
-      font-size: 14px;
-      transition: border 0.15s;
+      width: 100%; background: #0f172a; border: 1px solid var(--card-border); border-radius: 6px;
+      color: var(--text); padding: 8px 11px; font-family: var(--font); font-size: 13px;
     }
-    input:focus, select:focus, textarea:focus {
-      outline: none;
-      border-color: var(--primary);
-    }
-    textarea {
-      font-family: var(--font);
-      resize: vertical;
-      min-height: 90px;
-    }
-
-    /* Badges */
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); }
+    textarea { resize: vertical; min-height: 88px; }
     .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 8px;
-      border-radius: 9999px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+      display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
     }
-    .badge-idle { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
-    .badge-busy { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
-    .badge-offline { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
-
-    .badge-pending { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid #3b82f6; }
-    .badge-blocked { background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid #64748b; }
-    .badge-dispatched { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
-    .badge-completed { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
-    .badge-failed { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
-
-    .badge-type {
-      background: #334155;
-      color: #e2e8f0;
-      font-family: var(--mono);
-      font-size: 11px;
-    }
-
-    /* Tables */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    th, td {
-      padding: 10px 12px;
-      text-align: left;
-      border-bottom: 1px solid var(--card-border);
-    }
-    th {
-      color: var(--text-muted);
-      font-weight: 600;
-      background: #0f172a;
-      font-size: 12px;
-      text-transform: uppercase;
-    }
-    tr:hover td {
-      background: rgba(255, 255, 255, 0.02);
-    }
-
-    /* Skill bars */
-    .skill-bars {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      min-width: 130px;
-    }
-    .skill-line {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-family: var(--mono);
-      color: var(--text-muted);
-    }
-    .skill-bar-wrap {
-      flex: 1;
-      height: 4px;
-      background: #334155;
-      border-radius: 2px;
-      overflow: hidden;
-    }
-    .skill-bar-fill {
-      height: 100%;
-      background: var(--primary);
-    }
-
-    /* Task DAG Cards */
-    .task-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      max-height: 520px;
-      overflow-y: auto;
-      padding-right: 4px;
-    }
+    .badge-idle, .badge-completed { background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid #10b981; }
+    .badge-busy, .badge-dispatched { background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+    .badge-offline, .badge-failed { background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid #ef4444; }
+    .badge-pending { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid #3b82f6; }
+    .badge-blocked { background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid #64748b; }
+    .badge-type { background: #334155; color: #e2e8f0; font-family: var(--mono); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--card-border); }
+    th { color: var(--text-muted); font-weight: 600; background: #0f172a; font-size: 11px; text-transform: uppercase; }
+    .skill-bars { display: flex; flex-direction: column; gap: 3px; min-width: 120px; }
+    .skill-line { display: flex; align-items: center; gap: 6px; font-size: 11px; font-family: var(--mono); color: var(--text-muted); }
+    .skill-bar-wrap { flex: 1; height: 4px; background: #334155; border-radius: 2px; overflow: hidden; }
+    .skill-bar-fill { height: 100%; background: var(--primary); }
+    .task-list { display: flex; flex-direction: column; gap: 10px; max-height: 500px; overflow-y: auto; }
     .task-item {
-      background: #0f172a;
-      border: 1px solid var(--card-border);
-      border-left: 4px solid var(--primary);
-      border-radius: 8px;
-      padding: 14px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      transition: border 0.15s;
+      background: #0f172a; border: 1px solid var(--card-border); border-left: 4px solid var(--primary);
+      border-radius: 8px; padding: 12px 15px; display: flex; flex-direction: column; gap: 6px;
     }
     .task-item.completed { border-left-color: var(--success); }
     .task-item.dispatched { border-left-color: var(--warning); }
-    .task-item.blocked { border-left-color: #64748b; opacity: 0.8; }
+    .task-item.blocked { border-left-color: #64748b; opacity: 0.85; }
     .task-item.failed { border-left-color: var(--danger); }
-
-    .task-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .task-label-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 600;
-      font-size: 14px;
-    }
-    .task-desc {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .task-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding-top: 6px;
-      border-top: 1px dashed var(--card-border);
-      font-size: 12px;
-    }
-    .task-deps {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    /* Quick Connect Code Generator Box */
+    .task-header, .task-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .task-footer { padding-top: 6px; border-top: 1px dashed var(--card-border); font-size: 12px; }
+    .task-deps { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
     .code-box {
-      background: #090d16;
-      border: 1px solid #334155;
-      border-radius: 6px;
-      padding: 10px 14px;
-      font-family: var(--mono);
-      font-size: 12px;
-      color: #38bdf8;
-      overflow-x: auto;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
+      background: #090d16; border: 1px solid #334155; border-radius: 6px; padding: 9px 12px;
+      font-family: var(--mono); font-size: 12px; color: #38bdf8; display: flex; justify-content: space-between; align-items: center; gap: 10px;
     }
-
-    /* Progress bar */
-    .progress-wrap {
-      width: 100%;
-      height: 8px;
-      background: #0f172a;
-      border-radius: 999px;
-      overflow: hidden;
-      border: 1px solid var(--card-border);
-    }
-    .progress-bar {
-      height: 100%;
-      background: linear-gradient(90deg, #3b82f6, #10b981);
-      width: 0%;
-      transition: width 0.3s ease;
-    }
-
-    /* Modal */
+    .progress-wrap { width: 100%; height: 8px; background: #0f172a; border-radius: 999px; overflow: hidden; border: 1px solid var(--card-border); }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); width: 0%; transition: width 0.3s; }
     .modal-backdrop {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(4px);
-      z-index: 999;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      z-index: 999; justify-content: center; align-items: center; padding: 20px;
     }
     .modal {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      max-width: 800px;
-      width: 100%;
-      max-height: 85vh;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px;
+      max-width: 780px; width: 100%; max-height: 85vh; display: flex; flex-direction: column;
     }
-    .modal-header {
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--card-border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .modal-body {
-      padding: 20px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .modal-footer {
-      padding: 14px 20px;
-      border-top: 1px solid var(--card-border);
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-    }
+    .modal-header, .modal-footer { padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
+    .modal-header { border-bottom: 1px solid var(--card-border); }
+    .modal-footer { border-top: 1px solid var(--card-border); justify-content: flex-end; gap: 8px; }
+    .modal-body { padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
     pre.code-view {
-      background: #090d16;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      padding: 14px;
-      font-family: var(--mono);
-      font-size: 13px;
-      color: #e2e8f0;
-      white-space: pre-wrap;
-      word-break: break-all;
-      max-height: 400px;
-      overflow-y: auto;
+      background: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 12px;
+      font-family: var(--mono); font-size: 12px; color: #e2e8f0; white-space: pre-wrap; max-height: 380px; overflow-y: auto;
     }
-
-    /* Console logs */
     .console-log {
-      background: #090d16;
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 12px;
-      font-family: var(--mono);
-      font-size: 12px;
-      color: #94a3b8;
-      height: 140px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+      background: #090d16; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px;
+      font-family: var(--mono); font-size: 12px; color: #94a3b8; height: 130px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px;
     }
-    .log-line { display: flex; gap: 8px; }
-    .log-time { color: #64748b; }
-    .log-info { color: #38bdf8; }
-    .log-success { color: #34d399; }
-    .log-warn { color: #fbbf24; }
-    .log-err { color: #f87171; }
+    .log-time { color: #64748b; margin-right: 8px; }
+    .log-info { color: #38bdf8; } .log-success { color: #34d399; } .log-warn { color: #fbbf24; } .log-err { color: #f87171; }
   </style>
 </head>
 <body>
-
   <div class="container">
-    <!-- Top Bar -->
     <header>
       <div class="brand">
         <div class="brand-logo">⚡</div>
         <div class="brand-title">
-          <h1>Team 7 — Dağıtık Çoklu-Ajan Yönetim Konsolu</h1>
-          <p>Otonom LLM Görev Ayrıştırma, Tailscale Ajan Yönlendirme & Canlı Yürütme Motoru</p>
+          <h1>Team 7 — Distributed Multi-Agent Console</h1>
+          <p>Autonomous Task Decomposition, Tailscale Routing & Fault-Resilient Orchestration</p>
         </div>
       </div>
-
       <div class="top-actions">
         <div class="network-badge">
           <span class="status-dot" id="serverDot"></span>
-          <span id="masterIpLabel">Master IP: Bağlanıyor...</span>
+          <span id="masterIpLabel">Master IP: Connecting...</span>
           <button class="btn btn-secondary btn-sm" onclick="copyMasterUrl()" title="Master URL kopyala">📋</button>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="openSettingsModal()">⚙️ Ayarlar</button>
+        <button class="btn btn-success btn-sm" id="connectMeBtn" onclick="connectMyMachine(false)">⚡ Tailscale ile Bağlan</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleModal('settingsModal', true)">⚙️ Ayarlar</button>
         <button class="btn btn-primary btn-sm" onclick="refreshAll()">🔄 Yenile</button>
       </div>
     </header>
 
-    <!-- Quick Team Setup Snippet for Friends -->
-    <div class="card" style="border-left: 4px solid var(--info);">
+    <!-- One-Click Tailscale Auto-Connect -->
+    <div class="card" style="border-left: 4px solid var(--success);">
       <div class="card-header">
-        <div class="card-title">
-          <span>🤝 Ekip Arkadaşı Bağlantı Sihirbazı (Tailscale Worker Kurulumu)</span>
-        </div>
-        <span class="badge badge-pending">Adım Adım Eşleşme</span>
-      </div>
-      <p style="font-size: 13px; color: var(--text-muted);">
-        Arkadaşlarınızın kendi bilgisayarlarından bir Ajan (Worker Node) olarak bu Master sisteme bağlanabilmesi için yapmaları gereken tek şey:
-      </p>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 6px;">
-        <div>
-          <label style="font-size: 11px; color: var(--text-muted);">Arkadaşının Adı / Agent ID</label>
-          <input type="text" id="wizAgentId" value="mert-agent" oninput="updateWizSnippet()">
-        </div>
-        <div>
-          <label style="font-size: 11px; color: var(--text-muted);">Arkadaşının Tailscale IP'si</label>
-          <input type="text" id="wizAgentIp" placeholder="100.85.x.x" value="100.85.12.34" oninput="updateWizSnippet()">
-        </div>
-        <div>
-          <label style="font-size: 11px; color: var(--text-muted);">Arkadaşının Portu</label>
-          <input type="number" id="wizAgentPort" value="8001" oninput="updateWizSnippet()">
-        </div>
-        <div>
-          <label style="font-size: 11px; color: var(--text-muted);">Yerel Ollama Modeli</label>
-          <input type="text" id="wizAgentModel" value="llama3.2:3b" oninput="updateWizSnippet()">
+        <div class="card-title">🤝 Tek Tıkla Tailscale Katılımı (Otomatik IP & Model Algılama)</div>
+        <div class="row-actions">
+          <button class="btn btn-success" onclick="connectMyMachine(false)">⚡ Beni & Modellerimi Bağla</button>
+          <button class="btn btn-primary btn-sm" onclick="connectMyMachine(true)">🔍 Tailscale Ağını Tara</button>
         </div>
       </div>
-
-      <div class="code-box">
-        <code id="wizSnippetText"># Arkadaşına gönderilecek komut hazırlanıyor...</code>
-        <button class="btn btn-primary btn-sm" onclick="copyWizSnippet()">📋 Kodu Kopyala</button>
-      </div>
-
-      <div style="display:flex; justify-content:flex-end; gap:8px;">
-        <button class="btn btn-success btn-sm" onclick="quickRegisterFromWiz()">➕ Bu Ajanı Master'a Kaydet</button>
+      <div id="connectStatusText" style="font-size:13px;color:var(--text-muted);">
+        Tıkladığınızda Tailscale IP adresiniz ve bilgisayarınızdaki Ollama modelleri otomatik algılanıp sisteme bağlanır.
       </div>
     </div>
 
-    <!-- Main Grid: Agents & Decomposition -->
     <div class="grid-2">
-      <!-- Left Column: Registered Workers -->
+      <!-- Agents Table -->
       <div class="card">
         <div class="card-header">
-          <div class="card-title">
-            <span>🌐 Kayıtlı Ajanlar (Worker Mesh Nodes)</span>
-            <span id="agentCountBadge" class="badge badge-pending">0 Ajan</span>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="openAddAgentModal()">➕ Yeni Ajan Ekle</button>
+          <div class="card-title">🌐 Kayıtlı Ajanlar <span id="agentCountBadge" class="badge badge-pending">0 Ajan</span></div>
+          <button class="btn btn-primary btn-sm" onclick="toggleModal('addAgentModal', true)">➕ Yeni Ajan Ekle</button>
         </div>
-
         <div style="overflow-x: auto;">
-          <table id="agentsTable">
-            <thead>
-              <tr>
-                <th>Durum</th>
-                <th>Ajan ID / Model</th>
-                <th>Tailscale URL</th>
-                <th>Yetenekler (C / R / X)</th>
-                <th>Kuyruk</th>
-                <th>İşlem</th>
-              </tr>
-            </thead>
-            <tbody id="agentsTbody">
-              <tr><td colspan="6" style="text-align:center; color: var(--text-muted);">Ajanlar yükleniyor...</td></tr>
-            </tbody>
+          <table>
+            <thead><tr><th>Durum</th><th>Ajan / Model</th><th>Tailscale URL</th><th>Yetenek (C/R/X)</th><th>Kuyruk</th><th>İşlem</th></tr></thead>
+            <tbody id="agentsTbody"></tbody>
           </table>
         </div>
       </div>
 
-      <!-- Right Column: Requirement Decomposition & Plan -->
+      <!-- Requirement Decomposition -->
       <div class="card">
         <div class="card-header">
-          <div class="card-title">
-            <span>📝 Yazılım Gereksinimi Ayrıştırma (Decomposition)</span>
-          </div>
-          <div style="display:flex; gap:6px;">
-            <select id="presetSelect" onchange="loadPreset()" style="width: auto; font-size: 12px; padding: 4px 8px;">
+          <div class="card-title">📝 Gereksinim Ayrıştırma (Decomposition)</div>
+          <div class="row-actions">
+            <select id="presetSelect" onchange="loadPreset()" style="width:auto;font-size:12px;padding:4px 8px;">
               <option value="">-- Hazır Şablon Seç --</option>
-              <option value="library">📚 Kütüphane Yönetim Sistemi (Ceza ve Ödünç Takibi)</option>
-              <option value="ecommerce">🛒 E-Ticaret Sepet & Ödeme API Sistemi</option>
-              <option value="iot">📡 IoT Sensör Telemetri & Anomali Tespiti</option>
+              <option value="library">📚 Kütüphane Yönetim Sistemi</option>
+              <option value="ecommerce">🛒 E-Ticaret Sepet & Ödeme API</option>
+              <option value="iot">📡 IoT Sensör Telemetri & Anomali</option>
             </select>
             <button class="btn btn-secondary btn-sm" onclick="resetPlan()">🗑️ Temizle</button>
           </div>
         </div>
-
-        <textarea id="reqText" placeholder="Uygulama gereksinimi metnini buraya yazın veya yukarıdan hazır bir şablon seçin..."></textarea>
-
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <button class="btn btn-primary" onclick="decomposeRequirements()">
-            🧩 Görevleri Ayrıştır & DAG Grafiği Çıkar
-          </button>
-          <span style="font-size: 12px; color: var(--text-muted);" id="decompStatusLabel"></span>
+        <textarea id="reqText" placeholder="Yazılım gereksinimini buraya girin veya şablon seçin..."></textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <button class="btn btn-primary" onclick="decomposeRequirements()">🧩 Görevleri Ayrıştır & DAG Çıkar</button>
+          <span style="font-size:12px;color:var(--text-muted);" id="decompStatusLabel"></span>
         </div>
       </div>
     </div>
 
-    <!-- Execution Plan & Pipeline Section -->
+    <!-- Execution Pipeline -->
     <div class="card">
       <div class="card-header">
         <div class="card-title">
-          <span>⚡ Görev Yürütme & Bağımlılık Hattı (Execution Pipeline DAG)</span>
+          ⚡ Görev Yürütme & Bağımlılık Hattı (DAG)
           <span id="planProgressBadge" class="badge badge-blocked">0/0 Tamamlandı</span>
         </div>
-        <div style="display:flex; gap:10px; align-items:center;">
-          <button class="btn btn-success" id="autoRunBtn" onclick="toggleAutoRun()">
-            🚀 Otomatik Tüm Hattı Çalıştır (Auto-Run)
-          </button>
-          <button class="btn btn-primary btn-sm" onclick="dispatchNextReady()">
-            ▶️ Sıradaki Görevi Dağıt
-          </button>
-          <button class="btn btn-secondary btn-sm" onclick="syncAllWorkerResults()">
-            🔄 Sonuçları Eşle
-          </button>
+        <div class="row-actions">
+          <button class="btn btn-success" id="autoRunBtn" onclick="runFullPlan()">🚀 Tüm Planı Otomatik Çalıştır (/plan/run)</button>
+          <button class="btn btn-primary btn-sm" onclick="dispatchNextReady()">▶️ Sıradaki Görevi Dağıt</button>
+          <button class="btn btn-secondary btn-sm" onclick="syncAllWorkerResults()">🔄 Sonuçları Eşle</button>
         </div>
       </div>
-
-      <!-- Progress bar -->
-      <div class="progress-wrap">
-        <div class="progress-bar" id="planProgressBar"></div>
-      </div>
-
-      <!-- Task cards list -->
-      <div class="task-list" id="taskListContainer">
-        <div style="text-align:center; padding: 24px; color: var(--text-muted);">
-          Henüz ayrıştırılmış bir görev planı yok. Yukarıdaki formdan gereksinim metni girip "Ayrıştır" butonuna basın.
-        </div>
-      </div>
+      <div class="progress-wrap"><div class="progress-bar" id="planProgressBar"></div></div>
+      <div class="task-list" id="taskListContainer"></div>
     </div>
 
-    <!-- Live Console Output -->
+    <!-- Console Logs -->
     <div class="card">
       <div class="card-header">
-        <div class="card-title">
-          <span>📡 Canlı Sistem & Ağ Telemetri Günlüğü</span>
-        </div>
-        <button class="btn btn-secondary btn-sm" onclick="clearLogs()">Temizle</button>
+        <div class="card-title">📡 Canlı Sistem & Ağ Telemetri Günlüğü</div>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('consoleLogs').innerHTML=''">Temizle</button>
       </div>
-      <div class="console-log" id="consoleLogs">
-        <div class="log-line"><span class="log-time">[00:00:00]</span><span class="log-info">Konsol başlatıldı. Master düğümü izleniyor.</span></div>
-      </div>
+      <div class="console-log" id="consoleLogs"></div>
     </div>
   </div>
 
-  <!-- Modal: View Task Output / Code -->
+  <!-- Output Modal -->
   <div class="modal-backdrop" id="outputModal">
     <div class="modal">
-      <div class="modal-header">
-        <h3 id="modalTaskTitle">Görev Çıktısı</h3>
-        <button class="btn btn-secondary btn-sm" onclick="closeOutputModal()">✕</button>
-      </div>
+      <div class="modal-header"><h3 id="modalTaskTitle">Görev Çıktısı</h3><button class="btn btn-secondary btn-sm" onclick="toggleModal('outputModal', false)">✕</button></div>
       <div class="modal-body">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span id="modalTaskMeta" style="font-size: 13px; color: var(--text-muted);"></span>
-          <button class="btn btn-primary btn-sm" onclick="copyModalCode()">📋 Kodu Kopyala</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span id="modalTaskMeta" style="font-size:12px;color:var(--text-muted);"></span>
+          <button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('modalCodeView').innerText)">📋 Kopyala</button>
         </div>
         <pre class="code-view" id="modalCodeView"></pre>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeOutputModal()">Kapat</button>
-      </div>
     </div>
   </div>
 
-  <!-- Modal: Register Agent -->
+  <!-- Add Agent Modal -->
   <div class="modal-backdrop" id="addAgentModal">
-    <div class="modal" style="max-width: 500px;">
-      <div class="modal-header">
-        <h3>Yeni Worker Ajan Ekle</h3>
-        <button class="btn btn-secondary btn-sm" onclick="closeAddAgentModal()">✕</button>
-      </div>
+    <div class="modal" style="max-width:480px;">
+      <div class="modal-header"><h3>Yeni Worker Ajan Ekle</h3><button class="btn btn-secondary btn-sm" onclick="toggleModal('addAgentModal', false)">✕</button></div>
       <div class="modal-body">
-        <div>
-          <label style="font-size: 12px; color: var(--text-muted);">Ajan ID (örn: berat-worker)</label>
-          <input type="text" id="regAgentId" placeholder="agent-a">
-        </div>
-        <div>
-          <label style="font-size: 12px; color: var(--text-muted);">Tailscale Base URL (http://&lt;IP&gt;:&lt;PORT&gt;)</label>
-          <input type="text" id="regBaseUrl" placeholder="http://100.x.y.z:8001">
-        </div>
-        <div>
-          <label style="font-size: 12px; color: var(--text-muted);">Ollama Modeli</label>
-          <input type="text" id="regModel" placeholder="llama3.2:3b" value="llama3.2:3b">
-        </div>
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
-          <div>
-            <label style="font-size: 12px; color: var(--text-muted);">Coding (0-100)</label>
-            <input type="number" id="regCoding" min="0" max="100" value="85">
-          </div>
-          <div>
-            <label style="font-size: 12px; color: var(--text-muted);">Reasoning (0-100)</label>
-            <input type="number" id="regReasoning" min="0" max="100" value="85">
-          </div>
-          <div>
-            <label style="font-size: 12px; color: var(--text-muted);">Context (0-100)</label>
-            <input type="number" id="regContext" min="0" max="100" value="80">
-          </div>
+        <div><label style="font-size:12px;color:var(--text-muted);">Ajan ID</label><input id="regAgentId" placeholder="agent-a"></div>
+        <div><label style="font-size:12px;color:var(--text-muted);">Tailscale Base URL</label><input id="regBaseUrl" placeholder="http://100.x.y.z:8001"></div>
+        <div><label style="font-size:12px;color:var(--text-muted);">Ollama Modeli</label><input id="regModel" value="llama3.2:3b"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div><label style="font-size:12px;color:var(--text-muted);">Coding</label><input type="number" id="regCoding" value="85"></div>
+          <div><label style="font-size:12px;color:var(--text-muted);">Reasoning</label><input type="number" id="regReasoning" value="85"></div>
+          <div><label style="font-size:12px;color:var(--text-muted);">Context</label><input type="number" id="regContext" value="80"></div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeAddAgentModal()">İptal</button>
-        <button class="btn btn-success" onclick="submitRegisterAgent()">Kaydet ve Bağlan</button>
+        <button class="btn btn-secondary" onclick="toggleModal('addAgentModal', false)">İptal</button>
+        <button class="btn btn-success" onclick="submitRegisterAgent()">Kaydet</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Settings -->
-  <div class="modal-backdrop" id="settingsModal">
-    <div class="modal" style="max-width: 480px;">
-      <div class="modal-header">
-        <h3>Master API Bağlantı Ayarları</h3>
-        <button class="btn btn-secondary btn-sm" onclick="closeSettingsModal()">✕</button>
-      </div>
+  <!-- One-Click Tailscale Connect Modal -->
+  <div class="modal-backdrop" id="connectModal">
+    <div class="modal" style="max-width:600px;">
+      <div class="modal-header"><h3>⚡ Tailscale Worker Katılımı</h3><button class="btn btn-secondary btn-sm" onclick="closeConnectModal()">✕</button></div>
       <div class="modal-body">
-        <label style="font-size: 12px; color: var(--text-muted);">Master Agent API Base URL:</label>
-        <input type="text" id="customApiUrl" value="">
-        <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
-          Tarayıcıdan Master'a bağlanılan adres. Boş bırakılırsa geçerli pencere adresi (window.location.origin) kullanılır.
-        </p>
+        <div id="connectModalInfo" style="font-size:13px;color:var(--text-muted);"></div>
+        <div>
+          <label style="font-size:12px;color:var(--text-muted);">Bağlanacak Ollama Modeli (otomatik algılananlar veya manuel):</label>
+          <select id="connectModelSelect" onchange="updateJoinCmd()" style="margin-top:4px;"></select>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);">Terminalde bu tek komutu çalıştırın — ajan açıldığı an otomatik sisteme eklenecektir:</div>
+        <div class="code-box">
+          <code id="joinCmdText" style="word-break:break-all;"></code>
+          <button class="btn btn-primary btn-sm" onclick="copyJoinCmd()">📋 Kopyala</button>
+        </div>
+        <div style="font-size:12px;color:#34d399;" id="connectWaitStatus">🔄 Ajanınızın ayağa kalkması dinleniyor...</div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeSettingsModal()">İptal</button>
+        <button class="btn btn-secondary" onclick="closeConnectModal()">Kapat</button>
+        <button class="btn btn-success" onclick="connectMyMachine(false)">🔄 Şimdi Tekrar Kontrol Et</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal" style="max-width:450px;">
+      <div class="modal-header"><h3>Master API Ayarları</h3><button class="btn btn-secondary btn-sm" onclick="toggleModal('settingsModal', false)">✕</button></div>
+      <div class="modal-body">
+        <label style="font-size:12px;color:var(--text-muted);">Master API Base URL:</label>
+        <input id="customApiUrl">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="toggleModal('settingsModal', false)">İptal</button>
         <button class="btn btn-primary" onclick="saveSettings()">Kaydet</button>
       </div>
     </div>
   </div>
 
   <script>
-    // State
-    let API_BASE = window.location.origin && window.location.origin !== "null" && !window.location.origin.startsWith("file") 
-      ? window.location.origin 
-      : "http://localhost:8000";
+    let API_BASE = localStorage.getItem("MASTER_API_URL") || (location.origin && !location.origin.startsWith("file") ? location.origin : "http://localhost:8000");
+    let agentsList = [], planTasks = [], connectPollTimer = null;
 
-    const customSaved = localStorage.getItem("MASTER_API_URL");
-    if (customSaved) {
-      API_BASE = customSaved;
-    }
-
-    let agentsList = [];
-    let planTasks = [];
-    let isAutoRunning = false;
-    let autoRunInterval = null;
-
-    // Presets
     const PRESETS = {
-      library: "Build a robust Library Management System with REST APIs in FastAPI, PostgreSQL relational schema, book borrowing and loan tracking, automated overdue fine calculation, and comprehensive test suite.",
-      ecommerce: "Design an E-Commerce Backend System with Stripe payment gateway integration, shopping cart state management, product catalog endpoints, database migrations, and order processing workflows.",
-      iot: "Create an IoT Sensor Telemetry Pipeline with real-time anomaly detection, time-series data storage schema, alert webhook notification microservices, and integration tests."
+      library: "Build a Library Management System with FastAPI REST endpoints, PostgreSQL schema, book borrowing & overdue fine calculation, and unit tests.",
+      ecommerce: "Design an E-Commerce Backend with payment integration, shopping cart management, product catalog endpoints, database migrations, and order workflows.",
+      iot: "Create an IoT Sensor Telemetry Pipeline with real-time anomaly detection, time-series schema, alert notification microservices, and integration tests."
     };
 
-    function loadPreset() {
-      const val = document.getElementById("presetSelect").value;
-      if (val && PRESETS[val]) {
-        document.getElementById("reqText").value = PRESETS[val];
-      }
+    const $ = id => document.getElementById(id);
+    function toggleModal(id, show) {
+      if (id === 'settingsModal' && show) $('customApiUrl').value = API_BASE;
+      $(id).style.display = show ? "flex" : "none";
     }
-
-    // Logger
     function log(msg, type = "info") {
-      const logs = document.getElementById("consoleLogs");
-      const time = new Date().toLocaleTimeString();
-      const div = document.createElement("div");
-      div.className = "log-line";
-      div.innerHTML = `<span class="log-time">[${time}]</span><span class="log-${type}">${msg}</span>`;
-      logs.appendChild(div);
-      logs.scrollTop = logs.scrollHeight;
+      const box = $("consoleLogs"), div = document.createElement("div");
+      div.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString()}]</span><span class="log-${type}">${msg}</span>`;
+      box.appendChild(div); box.scrollTop = box.scrollHeight;
     }
-    function clearLogs() {
-      document.getElementById("consoleLogs").innerHTML = "";
+    function loadPreset() { const v = $("presetSelect").value; if (PRESETS[v]) $("reqText").value = PRESETS[v]; }
+    function copyMasterUrl() { navigator.clipboard.writeText(API_BASE); log(`Master URL kopyalandı: ${API_BASE}`); }
+
+    async function detectLocalOllamaModels() {
+      try {
+        const ctrl = new AbortController();
+        setTimeout(() => ctrl.abort(), 1500);
+        const res = await fetch("http://localhost:11434/api/tags", { signal: ctrl.signal });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (data.models || []).map(m => m.name).filter(Boolean);
+      } catch { return []; }
     }
 
-    // Master Info & Health
+    function updateJoinCmd() {
+      const model = $("connectModelSelect").value;
+      const q = model ? `?model=${encodeURIComponent(model)}` : "";
+      $("joinCmdText").innerText = `curl -sSL '${API_BASE}/api/v1/agents/join.sh${q}' | bash`;
+    }
+    function copyJoinCmd() { navigator.clipboard.writeText($("joinCmdText").innerText); log("Katılım komutu kopyalandı!", "success"); }
+    function closeConnectModal() {
+      if (connectPollTimer) { clearInterval(connectPollTimer); connectPollTimer = null; }
+      toggleModal("connectModal", false);
+    }
+
+    async function connectMyMachine(scanTailnet = false, silent = false) {
+      if (!silent) {
+        $("connectStatusText").innerText = scanTailnet
+          ? "🔍 Tailscale ağındaki tüm çevrimiçi ekip arkadaşları ve modeller taranıyor..."
+          : "⚡ Tailscale IP'niz ve yerel Ollama modelleriniz taranıyor...";
+      }
+      const localModels = scanTailnet ? [] : await detectLocalOllamaModels();
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/agents/connect`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ models: localModels, scan_tailnet: scanTailnet })
+        });
+        const data = await res.json();
+        if (data.connected && data.connected.length > 0) {
+          const names = data.connected.map(a => `${a.agent_id} (${a.model})`).join(", ");
+          $("connectStatusText").innerHTML = `✅ Bağlandı: <strong style="color:#34d399;">${names}</strong> (IP: ${data.client_ip})`;
+          log(`✅ Tailscale otomatik bağlantı başarılı: ${names}`, "success");
+          closeConnectModal();
+          await loadAgents();
+          return true;
+        }
+        if (silent) return false;
+
+        if (scanTailnet) {
+          $("connectStatusText").innerText = `⚠️ ${data.peers_scanned} Tailscale düğümü tarandı; çalışan yeni worker agent bulunamadı.`;
+          log(`Tailscale taraması (${data.peers_scanned} düğüm): yeni aktif worker bulunamadı.`, "warn");
+          return false;
+        }
+
+        const models = data.detected_models || [];
+        $("connectModalInfo").innerHTML = `Algılanan Tailscale IP: <strong style="color:#38bdf8;">${data.client_ip}</strong>` +
+          (models.length ? ` | Bulunan Ollama modelleri: <strong>${models.join(", ")}</strong>` : " | Yerel worker henüz açık değil.");
+        const sel = $("connectModelSelect");
+        sel.innerHTML = (models.length ? models : ["auto"]).map(m => `<option value="${m === 'auto' ? '' : m}">${m === 'auto' ? 'Otomatik (kurulu ilk Ollama modeli)' : m}</option>`).join("");
+        updateJoinCmd();
+        toggleModal("connectModal", true);
+        if (!connectPollTimer) {
+          connectPollTimer = setInterval(() => connectMyMachine(false, true), 3000);
+        }
+        log(`Tailscale IP (${data.client_ip}) algılandı; yerel worker başlatılması bekleniyor.`, "info");
+      } catch (e) {
+        if (!silent) log(`Bağlantı hatası: ${e.message}`, "err");
+      }
+      return false;
+    }
+
     async function fetchSystemInfo() {
       try {
         const res = await fetch(`${API_BASE}/api/v1/system/info`);
-        if (!res.ok) throw new Error("API not ok");
-        const data = await res.json();
-        const modelName = data.ollama_model || 'llama3.2';
-        document.getElementById("masterIpLabel").innerText = `Master IP: ${data.tailscale_ip}:${data.master_port} [LLM: ${modelName}]`;
-        document.getElementById("serverDot").className = "status-dot";
-      } catch (err) {
-        document.getElementById("masterIpLabel").innerText = `Master Bağlantısı Kesildi (${API_BASE})`;
-        document.getElementById("serverDot").className = "status-dot offline";
+        const d = await res.json();
+        $("masterIpLabel").innerText = `Master IP: ${d.tailscale_ip}:${d.master_port} [LLM: ${d.ollama_model || 'llama3.2'}]`;
+        $("serverDot").className = "status-dot";
+      } catch {
+        $("masterIpLabel").innerText = `Master Bağlantısı Kesildi (${API_BASE})`;
+        $("serverDot").className = "status-dot offline";
       }
     }
 
-    function copyMasterUrl() {
-      navigator.clipboard.writeText(API_BASE);
-      log(`Master URL kopyalandı: ${API_BASE}`, "info");
-      alert(`Master adresi kopyalandı:\n${API_BASE}`);
-    }
-
-    // Update Quick Connect Snippet for Friends
-    function updateWizSnippet() {
-      const name = document.getElementById("wizAgentId").value.trim() || "agent-node";
-      const ip = document.getElementById("wizAgentIp").value.trim() || "<tailscale-ip>";
-      const port = document.getElementById("wizAgentPort").value.trim() || "8001";
-      const model = document.getElementById("wizAgentModel").value.trim() || "llama3.2:3b";
-
-      const snippet = `AGENT_ID="${name}" AGENT_PORT=${port} AGENT_MODEL="${model}" python -m agent.main`;
-      document.getElementById("wizSnippetText").innerText = snippet;
-    }
-
-    function copyWizSnippet() {
-      const text = document.getElementById("wizSnippetText").innerText;
-      navigator.clipboard.writeText(text);
-      log("Ajan başlatma komutu kopyalandı!", "success");
-      alert("Arkadaşınızın terminaline yapıştırması gereken komut kopyalandı:\n\n" + text);
-    }
-
-    async function quickRegisterFromWiz() {
-      const name = document.getElementById("wizAgentId").value.trim();
-      const ip = document.getElementById("wizAgentIp").value.trim();
-      const port = document.getElementById("wizAgentPort").value.trim();
-      const model = document.getElementById("wizAgentModel").value.trim();
-
-      if (!name || !ip || !port) {
-        alert("Lütfen Ajan adı, IP ve Port bilgilerini eksiksiz girin.");
-        return;
-      }
-
-      const baseUrl = `http://${ip}:${port}`;
-      await registerAgentPayload({
-        agent_id: name,
-        base_url: baseUrl,
-        model: model,
-        capabilities: { coding: 85, reasoning: 85, context: 80 }
-      });
-    }
-
-    // Fetch and render agents
     async function loadAgents() {
       try {
         const res = await fetch(`${API_BASE}/api/v1/agents/health`);
-        if (!res.ok) throw new Error("Could not fetch agents");
         agentsList = await res.json();
-
-        document.getElementById("agentCountBadge").innerText = `${agentsList.length} Ajan`;
-        const tbody = document.getElementById("agentsTbody");
-        tbody.innerHTML = "";
-
-        if (agentsList.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color: var(--text-muted);">Kayıtlı ajan yok. Yukarıdan arkadaşlarınızı ekleyin.</td></tr>`;
+        $("agentCountBadge").innerText = `${agentsList.length} Ajan`;
+        const tbody = $("agentsTbody");
+        if (!agentsList.length) {
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Kayıtlı ajan yok.</td></tr>`;
           return;
         }
-
-        agentsList.forEach(a => {
-          let statusBadge = `<span class="badge badge-offline">Offline</span>`;
-          if (a.status === "idle") {
-            statusBadge = `<span class="badge badge-idle">🟢 IDLE</span>`;
-          } else if (a.status === "busy") {
-            statusBadge = `<span class="badge badge-busy">🟡 BUSY</span>`;
-          }
-
-          const c = a.capabilities?.coding || 50;
-          const r = a.capabilities?.reasoning || 50;
-          const x = a.capabilities?.context || 50;
-
-          tbody.innerHTML += `
-            <tr>
-              <td>${statusBadge}</td>
-              <td>
-                <div style="font-weight:600;">${a.agent_id}</div>
-                <div style="font-size:11px; color:var(--text-muted); font-family:var(--mono);">${a.model}</div>
-              </td>
-              <td style="font-family:var(--mono); font-size:12px;">
-                ${a.base_url ? `<a href="${a.base_url}/agent/v1/health" target="_blank" style="color:var(--info); text-decoration:none;">${a.base_url}</a>` : '<span style="color:var(--text-muted);">Yok</span>'}
-              </td>
-              <td>
-                <div class="skill-bars">
-                  <div class="skill-line"><span>C</span><div class="skill-bar-wrap"><div class="skill-bar-fill" style="width:${c}%"></div></div><span>${c}</span></div>
-                  <div class="skill-line"><span>R</span><div class="skill-bar-wrap"><div class="skill-bar-fill" style="width:${r}%; background:var(--purple)"></div></div><span>${r}</span></div>
-                  <div class="skill-line"><span>X</span><div class="skill-bar-wrap"><div class="skill-bar-fill" style="width:${x}%; background:var(--info)"></div></div><span>${x}</span></div>
-                </div>
-              </td>
-              <td>${a.queue_size || 0}/${a.max_queue || 5}</td>
-              <td>
-                <div style="display:flex; gap:6px;">
-                  <button class="btn btn-secondary btn-sm" onclick="pingAgent('${a.agent_id}', '${a.base_url}')" title="Canlı Test">🩺</button>
-                  <button class="btn btn-danger btn-sm" onclick="deleteAgent('${a.agent_id}')" title="Ajanı Sil">🗑️</button>
-                </div>
-              </td>
-            </tr>
-          `;
-        });
-      } catch (err) {
-        log(`Ajan listesi alınamadı: ${err.message}`, "err");
-      }
-    }
-
-    async function pingAgent(agentId, baseUrl) {
-      if (!baseUrl) {
-        alert("Ajanın base_url adresi tanımlı değil.");
-        return;
-      }
-      try {
-        const started = performance.now();
-        const res = await fetch(`${baseUrl}/agent/v1/health`);
-        const duration = Math.round(performance.now() - started);
-        if (res.ok) {
-          const data = await res.json();
-          log(`[Ping Başarılı] ${agentId} (${duration} ms) - Durum: ${data.status}, Model: ${data.model}`, "success");
-          alert(`✅ Ajan Online ve Sağlıklı!\nID: ${agentId}\nModel: ${data.model}\nDurum: ${data.status}\nYanıt Süresi: ${duration} ms`);
-        } else {
-          log(`[Ping Hatası] ${agentId}: HTTP ${res.status}`, "warn");
-          alert(`⚠️ Ajan yanıt verdi ancak hata kodu döndü: HTTP ${res.status}`);
-        }
-      } catch (err) {
-        log(`[Ping Başarısız] ${agentId} ulaşılamıyor: ${err.message}`, "err");
-        alert(`❌ Ajan bilgisayarına ulaşılamadı (${baseUrl}).\nTailscale bağlantısını ve Ajanın açık olup olmadığını kontrol edin.`);
-      }
-      loadAgents();
+        tbody.innerHTML = agentsList.map(a => {
+          const badge = a.status === "idle" ? `<span class="badge badge-idle">🟢 IDLE</span>` : a.status === "busy" ? `<span class="badge badge-busy">🟡 BUSY</span>` : `<span class="badge badge-offline">Offline</span>`;
+          const { coding: c = 50, reasoning: r = 50, context: x = 50 } = a.capabilities || {};
+          return `<tr>
+            <td>${badge}</td>
+            <td><div style="font-weight:600;">${a.agent_id}</div><div style="font-size:11px;color:var(--text-muted);font-family:var(--mono);">${a.model}</div></td>
+            <td style="font-family:var(--mono);font-size:12px;">${a.base_url ? `<a href="${a.base_url}/agent/v1/health" target="_blank" style="color:var(--info);text-decoration:none;">${a.base_url}</a>` : '-'}</td>
+            <td><div class="skill-bars">
+              <div class="skill-line"><span>C</span><div class="skill-bar-wrap"><div class="skill-bar-fill" style="width:${c}%"></div></div><span>${c}</span></div>
+              <div class="skill-line"><span>R</span><div class="skill-bar-wrap"><div class="skill-bar-fill" style="width:${r}%;background:var(--purple)"></div></div><span>${r}</span></div>
+              <div class="skill-line"><span>X</span><div class="skill-bar-wrap"><div class="skill-bar-fill" style="width:${x}%;background:var(--info)"></div></div><span>${x}</span></div>
+            </div></td>
+            <td>${a.queue_size || 0}/${a.max_queue || 5}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteAgent('${a.agent_id}')">🗑️</button></td>
+          </tr>`;
+        }).join("");
+      } catch (e) { log(`Ajan listesi alınamadı: ${e.message}`, "err"); }
     }
 
     async function registerAgentPayload(payload) {
       try {
-        const res = await fetch(`${API_BASE}/api/v1/agents`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail || "Kayıt başarısız");
-        }
-        log(`Ajan kaydedildi: ${payload.agent_id} (${payload.base_url})`, "success");
-        closeAddAgentModal();
-        loadAgents();
-      } catch (err) {
-        alert("Hata: " + err.message);
-        log(`Ajan kaydedilemedi: ${err.message}`, "err");
-      }
-    }
-
-    async function deleteAgent(agentId) {
-      if (!confirm(`'${agentId}' ajanını silmek istediğinize emin misiniz?`)) return;
-      try {
-        const res = await fetch(`${API_BASE}/api/v1/agents/${agentId}`, { method: "DELETE" });
-        if (!res.ok) throw new Error("Silinemedi");
-        log(`Ajan silindi: ${agentId}`, "warn");
-        loadAgents();
-      } catch (err) {
-        alert("Ajan silinemedi: " + err.message);
-      }
-    }
-
-    // Requirements Decomposition
-    async function decomposeRequirements() {
-      const text = document.getElementById("reqText").value.trim();
-      if (!text) {
-        alert("Lütfen önce bir gereksinim metni girin.");
-        return;
-      }
-
-      document.getElementById("decompStatusLabel").innerText = "Ayrıştırılıyor (Ollama)...";
-      log("Gereksinim metni analiz ediliyor ve alt görevler üretiliyor...", "info");
-
-      try {
-        const res = await fetch(`${API_BASE}/api/v1/requirements/decompose_and_map`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ requirement_text: text })
-        });
-
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.detail || "Ayrıştırma başarısız.");
-        }
-
-        const tasks = await res.json();
-        
-        // Plan info
-        let isMock = false;
-        try {
-          const infoRes = await fetch(`${API_BASE}/api/v1/plan/info`);
-          if (infoRes.ok) {
-            const pInfo = await infoRes.json();
-            isMock = pInfo.is_mock;
-            if (isMock) {
-              log(`[Fallback Modu] Ollama yanıt vermediği için varsayılan alt görevler yüklendi.`, "warn");
-            } else {
-              log(`🎉 [Ollama Başarılı] Model projeyi '${pInfo.project_title}' olarak ayrıştırdı!`, "success");
-            }
-          }
-        } catch (e) {}
-
-        log(`Başarılı! ${tasks.length} alt görev ve bağımlılık grafiği oluşturuldu.`, "success");
-        document.getElementById("decompStatusLabel").innerText = `Tamamlandı (${tasks.length} Görev)`;
-        loadPlanTasks();
-      } catch (err) {
-        log(`Ayrıştırma hatası: ${err.message}`, "err");
-        alert("Ayrıştırma hatası: " + err.message);
-        document.getElementById("decompStatusLabel").innerText = "Hata oluştu.";
-      }
-    }
-
-    async function resetPlan() {
-      if (planTasks.length > 0 && !confirm("Mevcut planı ve görevleri temizlemek istediğinize emin misiniz?")) return;
-      try {
-        await fetch(`${API_BASE}/api/v1/plan/reset`, { method: "POST" });
-        log("Görev planı temizlendi.", "info");
-        loadPlanTasks();
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    // Load Plan Tasks
-    async function loadPlanTasks() {
-      try {
-        const res = await fetch(`${API_BASE}/api/v1/plan/tasks`);
-        if (!res.ok) throw new Error("Görevler çekilemedi");
-        planTasks = await res.json();
-
-        const container = document.getElementById("taskListContainer");
-        const progressBadge = document.getElementById("planProgressBadge");
-        const progressBar = document.getElementById("planProgressBar");
-
-        if (planTasks.length === 0) {
-          container.innerHTML = `<div style="text-align:center; padding: 24px; color: var(--text-muted);">Henüz ayrıştırılmış bir görev planı yok.</div>`;
-          progressBadge.innerText = "0/0 Tamamlandı";
-          progressBadge.className = "badge badge-blocked";
-          progressBar.style.width = "0%";
-          return;
-        }
-
-        const completedCount = planTasks.filter(t => t.status === "completed").length;
-        const percent = Math.round((completedCount / planTasks.length) * 100);
-        progressBadge.innerText = `${completedCount}/${planTasks.length} Tamamlandı (%${percent})`;
-        progressBadge.className = percent === 100 ? "badge badge-completed" : "badge badge-pending";
-        progressBar.style.width = `${percent}%`;
-
-        // Check project title and origin (Ollama vs mock)
-        try {
-          const infoRes = await fetch(`${API_BASE}/api/v1/plan/info`);
-          if (infoRes.ok) {
-            const pInfo = await infoRes.json();
-            if (pInfo.project_title) {
-              const badge = pInfo.is_mock 
-                ? '<span class="badge badge-blocked">Mock Fallback</span>' 
-                : '<span class="badge badge-completed">🟢 Canlı Ollama</span>';
-              document.getElementById("decompStatusLabel").innerHTML = `${pInfo.project_title} ${badge}`;
-            }
-          }
-        } catch (e) {}
-
-        // Map labels for dependencies
-        const uuidToLabel = {};
-        planTasks.forEach(t => uuidToLabel[t.task_uuid] = t.label);
-
-        container.innerHTML = "";
-        planTasks.forEach(task => {
-          let statusBadge = `<span class="badge badge-pending">PENDING (Hazır)</span>`;
-          if (task.status === "blocked") statusBadge = `<span class="badge badge-blocked">BLOCKED (Önkoşul Bekliyor)</span>`;
-          if (task.status === "dispatched") statusBadge = `<span class="badge badge-dispatched">🚀 DISPATCHED (Yürütülüyor)</span>`;
-          if (task.status === "completed") statusBadge = `<span class="badge badge-completed">✅ COMPLETED (Tamamlandı)</span>`;
-          if (task.status === "failed") statusBadge = `<span class="badge badge-failed">❌ FAILED</span>`;
-
-          const depLabels = (task.dependency_uuids && task.dependency_uuids.length > 0)
-            ? task.dependency_uuids.map(id => uuidToLabel[id] || id.substring(0, 4)).join(", ")
-            : "Yok (Bağımsız)";
-
-          const reqCaps = task.required_capabilities || {};
-          const capsText = `C:${reqCaps.coding || 0} | R:${reqCaps.reasoning || 0} | X:${reqCaps.context || 0}`;
-
-          const isReady = (task.status === "pending");
-          const isCompleted = (task.status === "completed");
-          const isDispatched = (task.status === "dispatched");
-
-          container.innerHTML += `
-            <div class="task-item ${task.status}">
-              <div class="task-header">
-                <div class="task-label-title">
-                  <span style="font-family:var(--mono); color:var(--primary); font-size:15px; font-weight:700;">[${task.label}]</span>
-                  <span>${task.title}</span>
-                  <span class="badge badge-type">${task.category}</span>
-                </div>
-                <div>${statusBadge}</div>
-              </div>
-
-              <div class="task-desc">${task.description}</div>
-
-              <div class="task-footer">
-                <div class="task-deps">
-                  <span>Önkoşul: <strong>${depLabels}</strong></span> | 
-                  <span>Gereksinim: <strong>${capsText}</strong></span>
-                  ${task.assigned_agent ? ` | <span style="color:#38bdf8;">Ajan: <strong>${task.assigned_agent}</strong></span>` : ''}
-                </div>
-
-                <div style="display:flex; gap:6px;">
-                  ${isReady ? `<button class="btn btn-primary btn-sm" onclick="dispatchSpecificTask('${task.task_uuid}')">🚀 Dağıt</button>` : ''}
-                  ${isDispatched ? `<button class="btn btn-secondary btn-sm" onclick="pollTask('${task.task_uuid}')">🔄 Senkronize Et</button>` : ''}
-                  ${isCompleted ? `<button class="btn btn-success btn-sm" onclick="viewTaskOutput('${task.task_uuid}')">📄 Çıktıyı / Kodu Gör</button>` : ''}
-                </div>
-              </div>
-            </div>
-          `;
-        });
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    // Dispatch next ready task
-    async function dispatchNextReady() {
-      try {
-        const readyRes = await fetch(`${API_BASE}/api/v1/plan/ready`);
-        const readyTasks = await readyRes.json();
-        if (readyTasks.length === 0) {
-          log("Şu an dağıtıma hazır görev yok (önkoşullar devam ediyor veya tüm görevler bitti).", "warn");
-          return false;
-        }
-
-        const task = readyTasks[0];
-        return await dispatchSpecificTask(task.task_uuid);
-      } catch (err) {
-        log(`Dağıtım hatası: ${err.message}`, "err");
-        return false;
-      }
-    }
-
-    async function dispatchSpecificTask(taskUuid) {
-      try {
-        // Fetch task spec
-        const specRes = await fetch(`${API_BASE}/api/v1/plan/tasks/${taskUuid}/spec`);
-        if (!specRes.ok) throw new Error("Görev spec alınamadı");
-        const spec = await specRes.json();
-
-        log(`Görev [${spec.title}] için en uygun boş ajan aranıyor...`, "info");
-        const dispatchRes = await fetch(`${API_BASE}/api/v1/tasks/dispatch`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(spec)
-        });
-
-        if (!dispatchRes.ok) {
-          const errData = await dispatchRes.json();
-          throw new Error(errData.detail || "Dağıtılamadı");
-        }
-
-        const record = await dispatchRes.json();
-        log(`[Kabul Edildi] Görev başarıyla '${record.task.agent_id}' ajanına iletildi! (${record.round_trip_ms} ms)`, "success");
-        loadPlanTasks();
-        loadAgents();
-        return true;
-      } catch (err) {
-        log(`Görev dağıtılamadı: ${err.message}`, "err");
-        alert("Görev dağıtılamadı:\n" + err.message);
-        return false;
-      }
-    }
-
-    // Poll Worker Results
-    async function pollTask(taskUuid) {
-      try {
-        const res = await fetch(`${API_BASE}/api/v1/tasks/${taskUuid}/poll_worker`);
-        const data = await res.json();
-        if (data.status === "completed") {
-          log(`Görev (${taskUuid}) tamamlandı! Çıktı alındı ve önkoşullar serbest bırakıldı.`, "success");
-          loadPlanTasks();
-          loadAgents();
-        } else if (data.status === "running") {
-          log(`Görev (${taskUuid}) Ajan (${data.agent_id}) üzerinde çalışmaya devam ediyor...`, "info");
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    async function syncAllWorkerResults() {
-      const dispatched = planTasks.filter(t => t.status === "dispatched");
-      if (dispatched.length === 0) {
-        log("Şu anda yürütülen aktif görev yok.", "info");
-        return;
-      }
-      for (const t of dispatched) {
-        await pollTask(t.task_uuid);
-      }
-    }
-
-    // Auto-Run Engine
-    async function toggleAutoRun() {
-      const btn = document.getElementById("autoRunBtn");
-      if (isAutoRunning) {
-        isAutoRunning = false;
-        clearInterval(autoRunInterval);
-        btn.innerText = "🚀 Otomatik Tüm Hattı Çalıştır (Auto-Run)";
-        btn.className = "btn btn-success";
-        log("Otomatik yürütme durduruldu.", "warn");
-      } else {
-        isAutoRunning = true;
-        btn.innerText = "⏸️ Otomatik Yürütmeyi Durdur";
-        btn.className = "btn btn-danger";
-        log("Otomatik yürütme başlatıldı! Hazır görevler uygun ajanlara dağıtılacak.", "success");
-
-        autoRunLoop();
-        autoRunInterval = setInterval(autoRunLoop, 3500);
-      }
-    }
-
-    async function autoRunLoop() {
-      if (!isAutoRunning) return;
-      await syncAllWorkerResults();
-
-      const readyRes = await fetch(`${API_BASE}/api/v1/plan/ready`);
-      const readyTasks = await readyRes.json();
-
-      if (readyTasks.length > 0) {
-        log(`${readyTasks.length} görev dağıtıma hazır. Uygun ajan aranıyor...`, "info");
-        for (const t of readyTasks) {
-          const success = await dispatchSpecificTask(t.task_uuid);
-          if (!success) break;
-        }
-      } else {
-        const allCompleted = planTasks.length > 0 && planTasks.every(t => t.status === "completed");
-        if (allCompleted) {
-          log("🎉 Tebrikler! Tüm gereksinim ve alt görevler başarıyla tamamlandı!", "success");
-          toggleAutoRun();
-        }
-      }
-    }
-
-    // Output Modal
-    function viewTaskOutput(taskUuid) {
-      const task = planTasks.find(t => t.task_uuid === taskUuid);
-      if (!task) return;
-
-      document.getElementById("modalTaskTitle").innerText = `[${task.label}] ${task.title}`;
-      document.getElementById("modalTaskMeta").innerText = `Kategori: ${task.category.toUpperCase()} | Ajan: ${task.assigned_agent || 'Bilinmiyor'}`;
-      document.getElementById("modalCodeView").innerText = task.output || "Çıktı boş veya henüz kaydedilmedi.";
-      document.getElementById("outputModal").style.display = "flex";
-    }
-
-    function closeOutputModal() {
-      document.getElementById("outputModal").style.display = "none";
-    }
-
-    function copyModalCode() {
-      const code = document.getElementById("modalCodeView").innerText;
-      navigator.clipboard.writeText(code);
-      alert("Kod ve çıktı panoya kopyalandı!");
-    }
-
-    // Add Agent Modal
-    function openAddAgentModal() {
-      document.getElementById("addAgentModal").style.display = "flex";
-    }
-    function closeAddAgentModal() {
-      document.getElementById("addAgentModal").style.display = "none";
+        const res = await fetch(`${API_BASE}/api/v1/agents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        if (!res.ok) throw new Error((await res.json()).detail || "Kayıt başarısız");
+        log(`Ajan kaydedildi: ${payload.agent_id}`, "success");
+        toggleModal("addAgentModal", false); loadAgents();
+      } catch (e) { log(`Ajan kaydedilemedi: ${e.message}`, "err"); alert(e.message); }
     }
 
     function submitRegisterAgent() {
-      const agentId = document.getElementById("regAgentId").value.trim();
-      const baseUrl = document.getElementById("regBaseUrl").value.trim();
-      const model = document.getElementById("regModel").value.trim();
-      const coding = parseInt(document.getElementById("regCoding").value) || 0;
-      const reasoning = parseInt(document.getElementById("regReasoning").value) || 0;
-      const context = parseInt(document.getElementById("regContext").value) || 0;
-
-      if (!agentId || !model) {
-        alert("Ajan ID ve Model alanları zorunludur.");
-        return;
-      }
-
-      registerAgentPayload({
-        agent_id: agentId,
-        base_url: baseUrl || null,
-        model: model,
-        capabilities: { coding, reasoning, context }
-      });
+      const agent_id = $("regAgentId").value.trim(), base_url = $("regBaseUrl").value.trim() || null, model = $("regModel").value.trim();
+      if (!agent_id || !model) return alert("Ajan ID ve Model zorunludur.");
+      registerAgentPayload({ agent_id, base_url, model, capabilities: { coding: +$("regCoding").value || 0, reasoning: +$("regReasoning").value || 0, context: +$("regContext").value || 0 } });
     }
 
-    // Settings Modal
-    function openSettingsModal() {
-      document.getElementById("customApiUrl").value = API_BASE;
-      document.getElementById("settingsModal").style.display = "flex";
+    async function deleteAgent(id) {
+      if (!confirm(`'${id}' ajanını silmek istediğinize emin misiniz?`)) return;
+      await fetch(`${API_BASE}/api/v1/agents/${id}`, { method: "DELETE" });
+      log(`Ajan silindi: ${id}`, "warn"); loadAgents();
     }
-    function closeSettingsModal() {
-      document.getElementById("settingsModal").style.display = "none";
+
+    async function decomposeRequirements() {
+      const text = $("reqText").value.trim();
+      if (!text) return alert("Lütfen bir gereksinim metni girin.");
+      $("decompStatusLabel").innerText = "Ayrıştırılıyor...";
+      log("Gereksinim metni alt görevlere ayrıştırılıyor...", "info");
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/requirements/decompose_and_map`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirement_text: text })
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || "Ayrıştırma hatası");
+        const tasks = await res.json();
+        log(`${tasks.length} alt görev ve DAG oluşturuldu.`, "success");
+        loadPlanTasks();
+      } catch (e) { log(`Ayrıştırma hatası: ${e.message}`, "err"); alert(e.message); }
     }
+
+    async function resetPlan() {
+      await fetch(`${API_BASE}/api/v1/plan/reset`, { method: "POST" });
+      log("Görev planı sıfırlandı.", "info"); loadPlanTasks();
+    }
+
+    async function loadPlanTasks() {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/plan/tasks`);
+        planTasks = await res.json();
+        const container = $("taskListContainer"), badge = $("planProgressBadge"), bar = $("planProgressBar");
+        if (!planTasks.length) {
+          container.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-muted);">Henüz ayrıştırılmış bir görev planı yok.</div>`;
+          badge.innerText = "0/0 Tamamlandı"; bar.style.width = "0%"; return;
+        }
+        const done = planTasks.filter(t => t.status === "completed").length, pct = Math.round((done / planTasks.length) * 100);
+        badge.innerText = `${done}/${planTasks.length} Tamamlandı (%${pct})`;
+        badge.className = pct === 100 ? "badge badge-completed" : "badge badge-pending";
+        bar.style.width = `${pct}%`;
+
+        try {
+          const info = await (await fetch(`${API_BASE}/api/v1/plan/info`)).json();
+          if (info.project_title) {
+            $("decompStatusLabel").innerHTML = `${info.project_title} <span class="badge ${info.is_mock ? 'badge-blocked' : 'badge-completed'}">${info.is_mock ? 'Mock Fallback' : '🟢 Canlı Ollama'}</span>`;
+          }
+        } catch {}
+
+        const byId = Object.fromEntries(planTasks.map(t => [t.task_uuid, t.label]));
+        const badges = {
+          pending: `<span class="badge badge-pending">PENDING</span>`,
+          blocked: `<span class="badge badge-blocked">BLOCKED</span>`,
+          dispatched: `<span class="badge badge-dispatched">🚀 DISPATCHED</span>`,
+          completed: `<span class="badge badge-completed">✅ COMPLETED</span>`,
+          failed: `<span class="badge badge-failed">❌ FAILED</span>`
+        };
+
+        container.innerHTML = planTasks.map(t => {
+          const deps = (t.dependency_uuids || []).map(id => byId[id] || id.slice(0, 4)).join(", ") || "Yok";
+          const c = t.required_capabilities || {};
+          const attempts = (t.attempts || []).map(a => `${a.agent_id || '?'}:${a.outcome}`).join(" → ");
+          return `<div class="task-item ${t.status}">
+            <div class="task-header">
+              <div><strong style="font-family:var(--mono);color:var(--primary);">[${t.label}]</strong> <strong>${t.title}</strong> <span class="badge badge-type">${t.category}</span></div>
+              <div>${badges[t.status] || t.status}</div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);">${t.description}</div>
+            <div class="task-footer">
+              <div class="task-deps">
+                Önkoşul: <strong>${deps}</strong> | Gereksinim: <strong>C:${c.coding||0} R:${c.reasoning||0} X:${c.context||0}</strong>
+                ${t.assigned_agent ? ` | <span style="color:#38bdf8;">Ajan: <strong>${t.assigned_agent}</strong></span>` : ''}
+                ${attempts ? ` | <span style="color:#a78bfa;">Denemeler: ${attempts}</span>` : ''}
+              </div>
+              <div class="row-actions">
+                ${t.status === "pending" ? `<button class="btn btn-primary btn-sm" onclick="dispatchSpecificTask('${t.task_uuid}')">🚀 Dağıt</button>` : ''}
+                ${t.status === "dispatched" ? `<button class="btn btn-secondary btn-sm" onclick="pollTask('${t.task_uuid}')">🔄 Eşle</button>` : ''}
+                ${t.status === "completed" ? `<button class="btn btn-success btn-sm" onclick="viewTaskOutput('${t.task_uuid}')">📄 Çıktıyı Gör</button>` : ''}
+              </div>
+            </div>
+          </div>`;
+        }).join("");
+      } catch (e) { console.error(e); }
+    }
+
+    async function runFullPlan() {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/plan/run`, { method: "POST" });
+        if (!res.ok) throw new Error((await res.json()).detail || "Plan başlatılamadı");
+        log("🚀 Otomatik plan yürütme (/api/v1/plan/run) başlatıldı! Sonuçlar ve hata telafisi otomatik yönetiliyor.", "success");
+        loadPlanTasks(); loadAgents();
+      } catch (e) { log(`Plan çalıştırma hatası: ${e.message}`, "err"); alert(e.message); }
+    }
+
+    async function dispatchNextReady() {
+      const ready = await (await fetch(`${API_BASE}/api/v1/plan/ready`)).json();
+      if (!ready.length) return log("Dağıtıma hazır görev yok.", "warn");
+      await dispatchSpecificTask(ready[0].task_uuid);
+    }
+
+    async function dispatchSpecificTask(uuid) {
+      try {
+        const spec = await (await fetch(`${API_BASE}/api/v1/plan/tasks/${uuid}/spec`)).json();
+        const res = await fetch(`${API_BASE}/api/v1/tasks/dispatch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(spec) });
+        if (!res.ok) throw new Error((await res.json()).detail || "Dağıtılamadı");
+        const rec = await res.json();
+        log(`[Kabul Edildi] '${spec.title}' -> '${rec.task.agent_id}' (${rec.round_trip_ms} ms)`, "success");
+        loadPlanTasks(); loadAgents();
+      } catch (e) { log(`Dağıtım hatası: ${e.message}`, "err"); alert(e.message); }
+    }
+
+    async function pollTask(uuid) {
+      const d = await (await fetch(`${API_BASE}/api/v1/tasks/${uuid}/poll_worker`)).json();
+      if (d.status === "completed") log(`Görev (${uuid.slice(0,6)}) tamamlandı!`, "success");
+      loadPlanTasks(); loadAgents();
+    }
+
+    async function syncAllWorkerResults() {
+      for (const t of planTasks.filter(t => t.status === "dispatched")) await pollTask(t.task_uuid);
+    }
+
+    function viewTaskOutput(uuid) {
+      const t = planTasks.find(x => x.task_uuid === uuid);
+      if (!t) return;
+      $("modalTaskTitle").innerText = `[${t.label}] ${t.title}`;
+      $("modalTaskMeta").innerText = `Kategori: ${t.category.toUpperCase()} | Ajan: ${t.assigned_agent || (t.attempts?.slice(-1)[0]?.agent_id) || 'Bilinmiyor'}`;
+      $("modalCodeView").innerText = t.output || "Çıktı boş.";
+      toggleModal("outputModal", true);
+    }
+
     function saveSettings() {
-      const val = document.getElementById("customApiUrl").value.trim();
-      if (val) {
-        API_BASE = val;
-        localStorage.setItem("MASTER_API_URL", val);
-      } else {
-        localStorage.removeItem("MASTER_API_URL");
-        API_BASE = window.location.origin;
-      }
-      closeSettingsModal();
-      log(`Master API adresi güncellendi: ${API_BASE}`, "info");
-      refreshAll();
+      const v = $("customApiUrl").value.trim();
+      if (v) { API_BASE = v; localStorage.setItem("MASTER_API_URL", v); }
+      else { localStorage.removeItem("MASTER_API_URL"); API_BASE = location.origin; }
+      toggleModal("settingsModal", false); refreshAll();
     }
 
-    // Refresh All
-    async function refreshAll() {
-      await fetchSystemInfo();
-      await loadAgents();
-      await loadPlanTasks();
-    }
-
-    // Init
-    updateWizSnippet();
+    async function refreshAll() { await fetchSystemInfo(); await loadAgents(); await loadPlanTasks(); }
     refreshAll();
-    // Heartbeat every 8s
-    setInterval(() => {
-      loadAgents();
-      loadPlanTasks();
-    }, 8000);
+    setInterval(() => { loadAgents(); loadPlanTasks(); }, 4000);
   </script>
 </body>
 </html>

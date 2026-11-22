@@ -58,6 +58,15 @@ class DecomposeResponse(BaseModel):
     tasks: list[SubTask] = Field(min_length=1)
 
 
+_MOCK_SPECS: list[tuple[str, str, TaskType, str, list[str]]] = [
+    ("T1", "Database Schema Design", TaskType.DATABASE, "Design the relational models and migrations.", []),
+    ("T2", "Backend REST APIs", TaskType.BACKEND, "Implement authentication and core entity CRUD endpoints.", ["T1"]),
+    ("T3", "Frontend UI", TaskType.FRONTEND, "Build the user-facing views and forms.", ["T2"]),
+    ("T4", "Automated Tests", TaskType.TESTING, "Write unit and integration tests for the above.", ["T2", "T3"]),
+    ("T5", "Documentation", TaskType.DOCUMENTATION, "Document the API and setup instructions.", ["T2"]),
+]
+
+
 def mock_decomposition(requirement_text: str) -> DecomposeResponse:
     """Deterministic fallback used when Ollama is unreachable or returns an
     unparseable response, so the endpoint degrades gracefully instead of
@@ -66,40 +75,8 @@ def mock_decomposition(requirement_text: str) -> DecomposeResponse:
         project_title="Automated Software Project",
         summary=f"Mock decomposition (local model unavailable) for: {requirement_text[:120]}",
         tasks=[
-            SubTask(
-                task_id="T1",
-                title="Database Schema Design",
-                category=TaskType.DATABASE,
-                description="Design the relational models and migrations.",
-            ),
-            SubTask(
-                task_id="T2",
-                title="Backend REST APIs",
-                category=TaskType.BACKEND,
-                description="Implement authentication and core entity CRUD endpoints.",
-                dependencies=["T1"],
-            ),
-            SubTask(
-                task_id="T3",
-                title="Frontend UI",
-                category=TaskType.FRONTEND,
-                description="Build the user-facing views and forms.",
-                dependencies=["T2"],
-            ),
-            SubTask(
-                task_id="T4",
-                title="Automated Tests",
-                category=TaskType.TESTING,
-                description="Write unit and integration tests for the above.",
-                dependencies=["T2", "T3"],
-            ),
-            SubTask(
-                task_id="T5",
-                title="Documentation",
-                category=TaskType.DOCUMENTATION,
-                description="Document the API and setup instructions.",
-                dependencies=["T2"],
-            ),
+            SubTask(task_id=tid, title=title, category=cat, description=desc, dependencies=deps)
+            for tid, title, cat, desc, deps in _MOCK_SPECS
         ],
     )
 

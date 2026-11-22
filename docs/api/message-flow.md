@@ -1,71 +1,68 @@
-# Master ↔ Agent Message Flow (Sprint 3)
+# Master ↔ Agent Message Flow
 
 Owner: Nehir Tunç
 
-
 ![Message flow](../diagrams/message-flow.png)
 
-The flow has three message types between master and agent:
-**send task → acknowledgement → result**. Dependencies decide *when* a task may be sent.
+Three messages go between master and agent: **send task → acknowledgement → result**. The master decides
+*when* a task may be sent (dependencies) and *what to do when something fails* ([error-recovery.md](../error-recovery.md)).
 
-## 1. Send task (master → agent)
+## 1. Plan
 
-`POST /agent/v1/tasks` with a `TaskMessage` (see [task-dispatch-contract.md](task-dispatch-contract.md)).
-Before it is sent, the master checks:
+`POST /api/v1/requirements/decompose_and_map` splits the requirement into tasks (`T1`, `T2`, …), maps each
+label to a UUID and each `dependencies: ["T1"]` to `dependency_uuids`. Tasks with open dependencies are
+`blocked`. A dependency cycle (`T1 → T2 → T1`) is rejected with `422`.
 
-1. **Dependencies** – every task listed in `depends_on` must be `completed`. Otherwise the
-   master answers `400` and nothing is sent.
-2. **Selection** – the agent must meet *all three* `required_capabilities` (coding, reasoning,
-   context); among those the highest total score wins (`master/selection.py`). No match → `404`.
+## 2. Send task (master → agent)
 
-`context.dependency_outputs` carries the outputs of the finished prerequisite tasks
-(`{"T1": "<text>"}`), so the agent can build on earlier work. The agent puts `context` into its prompt.
+For every **ready** task (all dependencies completed) the master:
 
-## 2. Acknowledgement (agent → master)
+1. asks the suitable agents `GET /agent/v1/health` and keeps the ones that are `idle`;
+2. picks the best one: it must meet **all three** required scores (coding, reasoning, context), highest total wins
+   (`master/selection.py`);
+3. sends `POST /agent/v1/tasks` with a `TaskMessage`. `context.dependency_outputs` holds the outputs of the
+   finished prerequisite tasks (`{"T1": "<text>"}`), so the agent builds on earlier work.
 
-Returned immediately (target ≤ 200 ms), **before** the model runs. It only says the task was received:
+## 3. Acknowledgement (agent → master)
 
-| Answer | Meaning | Master result |
-|---|---|---|
-| `accepted` + `queue_position` | In the agent's queue | `DispatchRecord.status = acknowledged`, task becomes `dispatched` |
-| `rejected` + `reason` | Wrong agent, unsupported type or queue full | `status = rejected` |
-| no answer / error | Agent off, slow or broken | `503` / `504` / `502`, record `failed` (reassignment is Sprint 4) |
+Returned immediately, **before** the model runs. It only says the task was received.
 
-Sending the same `task_id` again is safe: the agent returns the original ack with `duplicate: true`.
+| Answer | Meaning |
+|---|---|
+| `accepted` + `queue_position` | In the agent's queue |
+| `rejected` + `reason` | Wrong agent, unsupported type or queue full → recovery rule 4 |
+| no answer / error | Agent off, slow or broken → recovery rule 5 |
 
-## 3. Result (agent → master side)
+Sending the same `task_id` again returns the first ack with `duplicate: true`, unless that task failed or was
+rejected before; then the agent runs it again.
 
-The agent runs the task on its own Ollama model in the background and keeps the state:
+## 4. Result
+
+The agent runs the task on its own Ollama model in the background. The master asks
+`GET /agent/v1/tasks/{task_id}/result` until the state is final:
 
 `queued` → `running` → `completed` (with `output`) **or** `failed` (with `error`)
 
-Read with `GET /agent/v1/tasks/{task_id}/result`. The master is told about the outcome with:
+- `completed`: the master stores the output, the task becomes `completed`, tasks that wait for it become ready.
+- `failed`, no result in time, or agent unreachable: recovery rules 6 to 8 (try another agent, max 3 attempts).
 
-- `POST /api/v1/tasks/{task_id}/complete` with `{"output": "..."}` → task `completed`,
-  tasks that were waiting on it become **ready**.
-- `POST /api/v1/tasks/{task_id}/fail` → task `failed`; its dependents **stay blocked**.
+## 5. Running it
 
-> Status today: reading the result and calling `complete`/`fail` is done by the caller
-> (UI, script or Swagger). Automatic result collection by the master (polling the agent and
-> storing a `TaskResult`) is the master-agent owner's Sprint 3 work; the endpoints above stay the same
-> when it is automated.
+`POST /api/v1/plan/run` does steps 2 to 4 for the whole plan. Independent tasks run at the same time.
+`?wait=true` returns when the plan is done; without it the call returns at once and the progress can be read from
+`GET /api/v1/plan/tasks` and `GET /api/v1/plan/run`.
+
+The same steps can be done by hand, which is useful for debugging: `GET /plan/tasks/{id}/spec` →
+`POST /tasks/dispatch` → `GET <agent>/agent/v1/tasks/{id}/result` → `POST /tasks/{id}/complete` (or `/fail`).
 
 ## Task lifecycle in the master
 
 ```
 pending ──(has open dependencies)──> blocked ──(all dependencies completed)──> pending (ready)
-pending/ready ──(agent acknowledged)──> dispatched ──> completed | failed
+pending ──(agent acknowledged)──> dispatched ──> completed
+                                       │
+                                       ├──(attempt failed, attempts left)──> pending (another agent)
+                                       └──(attempts used up / no agent left)──> failed
 ```
 
-A `failed` task never unblocks its dependents. A dependency cycle (`T1 → T2 → T1`) is rejected
-when the plan is created (`422`, message shows the cycle).
-
-## Dependency management
-
-- The decomposition uses text labels (`T1`, `T2`, …). `POST /api/v1/requirements/decompose_and_map`
-  maps each label to a UUID and each `dependencies: ["T1"]` to `dependency_uuids`.
-- `GET /api/v1/plan/ready` lists tasks that can be sent now.
-- `GET /api/v1/plan/tasks/{task_id}/spec` returns the ready-to-send `TaskSpec` (UUID `task_id`,
-  `depends_on`, `required_capabilities`, `context.dependency_outputs`).
-- A dependency label that does not exist in the plan is ignored (the model may invent labels).
-- Several plans can live in one master process; restart the master (or start with a clean demo) to avoid mixing them.
+A `failed` task never unblocks its dependents. Details and settings: [error-recovery.md](../error-recovery.md).

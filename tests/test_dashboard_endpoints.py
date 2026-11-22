@@ -182,3 +182,78 @@ def test_poll_worker_result():
         poll2 = client.get(f"/api/v1/tasks/{task_id}/poll_worker").json()
         assert poll2["status"] == "completed"
         assert poll2["output"] == "FastAPI Code Sample"
+
+
+def test_auto_connect_discovers_worker_and_models():
+    async def mock_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "100.85.10.5" and request.url.port == 8001 and request.url.path == "/agent/v1/health":
+            return httpx.Response(200, json={"agent_id": "berat.pc", "model": "qwen2.5-coder:7b", "status": "idle"})
+        if request.url.host == "100.85.10.5" and request.url.port == 11434 and request.url.path == "/api/tags":
+            return httpx.Response(200, json={"models": [{"name": "qwen2.5-coder:7b"}, {"name": "llama3.2:3b"}]})
+        raise httpx.ConnectError("refused", request=request)
+
+    app = create_master(transport=httpx.MockTransport(mock_handler), agents_file=None)
+    with TestClient(app) as client:
+        res = client.post(
+            "/api/v1/agents/connect",
+            json={"client_ip": "100.85.10.5", "ports": [8001, 8002], "models": ["llama3.2:3b"]},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["client_ip"] == "100.85.10.5"
+        assert len(body["connected"]) == 1
+        assert body["connected"][0]["agent_id"] == "berat-pc"
+        assert body["connected"][0]["model"] == "qwen2.5-coder:7b"
+        assert body["connected"][0]["capabilities"]["coding"] >= 90
+        assert set(body["detected_models"]) == {"qwen2.5-coder:7b", "llama3.2:3b"}
+        # Registered in master
+        registered = {a["agent_id"] for a in client.get("/api/v1/agents").json()}
+        assert "berat-pc" in registered
+
+
+def test_auto_connect_returns_join_command_when_no_worker():
+    async def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    app = create_master(transport=httpx.MockTransport(refuse), agents_file=None)
+    with TestClient(app) as client:
+        res = client.post("/api/v1/agents/connect", json={"models": ["gemma3:4b"]})
+        assert res.status_code == 200
+        body = res.json()
+        assert body["connected"] == []
+        assert body["detected_models"] == ["gemma3:4b"]
+        assert "/api/v1/agents/join.sh?model=gemma3:4b" in body["join_command"]
+
+        script = client.get("/api/v1/agents/join.sh", params={"model": "gemma3:4b;rm -rf /"})
+        assert script.status_code == 200
+        assert 'MODEL="gemma3:4brm-rf/"' in script.text
+        assert ";" not in script.text.split('MODEL="')[1].split('"')[0]
+        assert "exec python3 -m agent.main" in script.text
+
+
+def test_agent_auto_registers_to_master_on_startup():
+    from agent.main import AgentSettings, create_app as create_agent
+
+    master_app = create_master(agents_file=None)
+    ollama_mock = httpx.MockTransport(
+        lambda req: httpx.Response(200, json={"models": [{"name": "qwen3:4b"}]})
+    )
+    with TestClient(master_app) as master_client:
+        agent_app = create_agent(
+            AgentSettings(
+                agent_id="auto-node",
+                model="auto",
+                master_url="http://master.test",
+                agent_port=8005,
+            ),
+            ollama_transport=ollama_mock,
+            master_transport=httpx.ASGITransport(app=master_app),
+        )
+        with TestClient(agent_app) as agent_client:
+            assert agent_client.get("/agent/v1/health").json()["model"] == "qwen3:4b"
+            assert agent_client.get("/agent/v1/models").json()["models"] == ["qwen3:4b"]
+
+        agents = {a["agent_id"]: a for a in master_client.get("/api/v1/agents").json()}
+        assert "auto-node" in agents
+        assert agents["auto-node"]["model"] == "qwen3:4b"
+        assert ":8005" in agents["auto-node"]["base_url"]
