@@ -59,6 +59,4 @@ answered as duplicates), so a fixed model or a freed queue is enough.
 
 ## Not covered yet
 
-- **Review of the output** (Sprint 4 Week 8): a review agent will check a completed output; a rejected output
-  will use the same retry path as rule 6.
 - The plan and its attempts are kept in the master's memory; restarting the master loses them.

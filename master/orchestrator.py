@@ -1,13 +1,13 @@
-"""Runs a decomposed plan end to end (Sprint 4, Week 7).
+﻿"""Runs a decomposed plan end to end (Sprint 4, Week 7-8).
 
 The loop the master follows for every task of a plan:
 
     ready task -> pick an agent and send it -> wait for the agent's result
-               -> completed: store the output, release the tasks waiting on it
-               -> problem:   apply the recovery rules (docs/error-recovery.md)
+               -> completed: optionally verify via Review Agent -> store output, release dependents
+               -> problem (or review rejected): apply the recovery rules (docs/error-recovery.md)
 
 Everything that touches the network is passed in as a function (`send`,
-`fetch_result`), so this module has no HTTP code and is easy to test.
+`fetch_result`, `review_output`), so this module has no HTTP code and is easy to test.
 """
 
 import asyncio
@@ -43,6 +43,8 @@ class DispatchResult:
 SendFn = Callable[[TaskSpec, set[str]], Awaitable[DispatchResult]]
 # Returns the agent's result as a dict (status/output/error), or None if the agent could not be reached.
 FetchResultFn = Callable[[AgentRegistration, UUID], Awaitable[dict | None]]
+# Reviews a completed task output; returns ("approved", reason) or ("rejected", reason).
+ReviewFn = Callable[[TaskSpec, str], Awaitable[tuple[str, str | None]]]
 
 
 class RunReport(BaseModel):
@@ -83,6 +85,7 @@ async def run_task(
     send: SendFn,
     fetch_result: FetchResultFn,
     settings: RunSettings,
+    review_output: ReviewFn | None = None,
 ) -> None:
     """Run one task to completion, or mark it failed after the recovery rules are used up."""
     tried: set[str] = set()  # agents that already failed this task are not asked again
@@ -94,7 +97,8 @@ async def run_task(
         dep.mark_failed(task_uuid)
 
     while True:
-        sent = await send(dep.to_task_spec(task_uuid), tried)
+        spec = dep.to_task_spec(task_uuid)
+        sent = await send(spec, tried)
 
         if sent.kind == "no_agent":  # waiting or retrying cannot help
             return give_up("no_agent", None, sent.detail)
@@ -112,9 +116,18 @@ async def run_task(
         if sent.kind == "accepted":
             outcome, text = await _wait_for_result(sent.agent, task_uuid, fetch_result, settings)
             if outcome == "completed":
-                dep.record_attempt(task_uuid, agent_id, "completed")
-                dep.mark_completed(task_uuid, text)
-                return
+                if review_output is not None:
+                    decision, reason = await review_output(spec, text or "")
+                    if decision == "rejected":
+                        outcome, text = "review_rejected", reason or "output rejected by review agent"
+                    else:
+                        dep.record_attempt(task_uuid, agent_id, "completed", reason)
+                        dep.mark_completed(task_uuid, text)
+                        return
+                else:
+                    dep.record_attempt(task_uuid, agent_id, "completed")
+                    dep.mark_completed(task_uuid, text)
+                    return
         else:  # rejected | unreachable
             outcome, text = sent.kind, sent.detail
 
@@ -131,6 +144,7 @@ async def run_plan(
     send: SendFn,
     fetch_result: FetchResultFn,
     settings: RunSettings | None = None,
+    review_output: ReviewFn | None = None,
 ) -> RunReport:
     """Run every task of the plan in dependency order. Independent tasks run at the same time."""
     settings = settings or RunSettings()
@@ -142,7 +156,9 @@ async def run_plan(
         for task in dep.get_ready_tasks():
             if task.task_uuid not in started:
                 started.add(task.task_uuid)
-                running[asyncio.create_task(run_task(dep, task.task_uuid, send, fetch_result, settings))] = task.task_uuid
+                running[
+                    asyncio.create_task(run_task(dep, task.task_uuid, send, fetch_result, settings, review_output))
+                ] = task.task_uuid
         if not running:
             break
         done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
