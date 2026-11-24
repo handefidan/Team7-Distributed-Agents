@@ -43,7 +43,7 @@ The agent runs the task on its own Ollama model in the background. The master as
 
 `queued` → `running` → `completed` (with `output`) **or** `failed` (with `error`)
 
-- `completed`: the master stores the output, the task becomes `completed`, tasks that wait for it become ready.
+- `completed`: if a dedicated Review Agent (`supported_types: ["review"]`) is registered, the master dispatches a `review` task with `context.artifact`. If `decision == "approved"` (or no Review Agent is registered), the master stores the output and marks the task `completed`. If `decision == "rejected"` (or the review output is empty/malformed), the attempt is recorded as `review_rejected` and enters recovery rule 13 (retry on another agent).
 - `failed`, no result in time, or agent unreachable: recovery rules 6 to 8 (try another agent, max 3 attempts).
 
 ## 5. Running it
