@@ -73,7 +73,7 @@ def test_subtask_converts_to_a_dispatchable_task_spec():
 
 def test_classified_task_goes_to_the_agent_that_fits_its_type():
     coder = agent("coder", coding=95, reasoning=70, context=60)
-    thinker = agent("thinker", coding=60, reasoning=95, context=70)
+    thinker = agent("thinker", coding=70, reasoning=95, context=70)
     backend = SubTask(task_id="T1", title="API", category=TaskType.BACKEND, description="x").to_task_spec()
     database = SubTask(task_id="T2", title="Schema", category=TaskType.DATABASE, description="x").to_task_spec()
     assert select_agent([coder, thinker], backend).agent_id == "coder"
