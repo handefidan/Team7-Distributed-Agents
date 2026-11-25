@@ -9,77 +9,107 @@
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0f172a; --card-bg: #1e293b; --card-border: #334155;
-      --text: #f8fafc; --text-muted: #94a3b8; --primary: #3b82f6;
-      --primary-hover: #2563eb; --success: #10b981; --warning: #f59e0b;
-      --danger: #ef4444; --info: #06b6d4; --purple: #8b5cf6;
+      --bg: #0b1120; --card-bg: #151f32; --card-border: #26334d;
+      --surface: #0f172a; --text: #f8fafc; --text-muted: #94a3b8;
+      --primary: #3b82f6; --primary-hover: #2563eb;
+      --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+      --info: #06b6d4; --purple: #8b5cf6;
       --font: 'Inter', -apple-system, sans-serif; --mono: 'Fira Code', monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.5; padding: 24px; }
-    .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-    header, .card {
+    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.5; padding: 20px; }
+    .container { max-width: 1440px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+    header, .card, .kpi-card {
       background: var(--card-bg); border: 1px solid var(--card-border);
-      border-radius: 12px; padding: 18px 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.25);
     }
-    header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    header { padding: 16px 22px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; }
     .brand { display: flex; align-items: center; gap: 14px; }
     .brand-logo {
       width: 42px; height: 42px; background: linear-gradient(135deg, #3b82f6, #8b5cf6);
       border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px;
+      box-shadow: 0 0 16px rgba(59,130,246,0.35);
     }
-    .brand-title h1 { font-size: 19px; font-weight: 700; }
+    .brand-title h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.2px; }
     .brand-title p { font-size: 12px; color: var(--text-muted); }
     .network-badge {
-      display: flex; align-items: center; gap: 10px; background: #0f172a;
-      border: 1px solid var(--card-border); padding: 6px 14px; border-radius: 999px;
+      display: flex; align-items: center; gap: 10px; background: var(--surface);
+      border: 1px solid var(--card-border); padding: 5px 12px; border-radius: 999px;
       font-family: var(--mono); font-size: 12px;
     }
-    .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); }
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success); flex-shrink: 0; }
     .status-dot.offline { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
     .top-actions, .row-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+    /* KPI Summary Row */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    @media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 520px) { .kpi-grid { grid-template-columns: 1fr; } }
+    .kpi-card { padding: 14px 18px; display: flex; flex-direction: column; gap: 4px; }
+    .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; }
+    .kpi-value { font-size: 22px; font-weight: 700; font-family: var(--mono); }
+    .kpi-sub { font-size: 12px; color: var(--text-muted); }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
     @media (max-width: 1024px) { .grid-2 { grid-template-columns: 1fr; } }
-    .card { display: flex; flex-direction: column; gap: 14px; }
-    .card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--card-border); padding-bottom: 10px; }
-    .card-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .card { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--card-border); padding-bottom: 10px; }
+    .card-title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+
     button, .btn {
-      font-family: var(--font); font-weight: 600; font-size: 13px; border: none; border-radius: 6px;
+      font-family: var(--font); font-weight: 600; font-size: 13px; border: none; border-radius: 7px;
       padding: 7px 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: 0.15s;
     }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
     .btn-primary { background: var(--primary); color: #fff; }
-    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
     .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover:not(:disabled) { filter: brightness(1.08); }
     .btn-danger { background: var(--danger); color: #fff; }
-    .btn-secondary { background: #334155; color: #f8fafc; }
+    .btn-danger:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn-secondary { background: #26334d; color: #f8fafc; }
+    .btn-secondary:hover:not(:disabled) { background: #334155; }
     .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* Filter Pills */
+    .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; }
+    .filter-pill {
+      background: var(--surface); color: var(--text-muted); border: 1px solid var(--card-border);
+      padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .filter-pill.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
     input, select, textarea {
-      width: 100%; background: #0f172a; border: 1px solid var(--card-border); border-radius: 6px;
+      width: 100%; background: var(--surface); border: 1px solid var(--card-border); border-radius: 7px;
       color: var(--text); padding: 8px 11px; font-family: var(--font); font-size: 13px;
     }
     input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); }
-    textarea { resize: vertical; min-height: 88px; }
+    textarea { resize: vertical; min-height: 92px; }
+
     .badge {
       display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
       font-size: 11px; font-weight: 600; text-transform: uppercase;
     }
-    .badge-idle, .badge-completed { background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid #10b981; }
-    .badge-busy, .badge-dispatched { background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid #f59e0b; }
-    .badge-offline, .badge-failed { background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid #ef4444; }
-    .badge-pending { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid #3b82f6; }
-    .badge-blocked { background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid #64748b; }
-    .badge-type { background: #334155; color: #e2e8f0; font-family: var(--mono); }
+    .badge-idle, .badge-completed { background: rgba(16,185,129,0.18); color: #34d399; border: 1px solid rgba(16,185,129,0.5); }
+    .badge-busy, .badge-dispatched { background: rgba(245,158,11,0.18); color: #fbbf24; border: 1px solid rgba(245,158,11,0.5); }
+    .badge-offline, .badge-failed { background: rgba(239,68,68,0.18); color: #f87171; border: 1px solid rgba(239,68,68,0.5); }
+    .badge-pending { background: rgba(59,130,246,0.16); color: #60a5fa; border: 1px solid rgba(59,130,246,0.5); }
+    .badge-blocked { background: rgba(148,163,184,0.14); color: #94a3b8; border: 1px solid rgba(100,116,139,0.5); }
+    .badge-type { background: #26334d; color: #e2e8f0; font-family: var(--mono); }
+    .badge-time { background: rgba(6,182,212,0.15); color: #22d3ee; border: 1px solid rgba(6,182,212,0.4); font-family: var(--mono); }
+
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--card-border); }
-    th { color: var(--text-muted); font-weight: 600; background: #0f172a; font-size: 11px; text-transform: uppercase; }
-    .skill-bars { display: flex; flex-direction: column; gap: 3px; min-width: 120px; }
+    th { color: var(--text-muted); font-weight: 600; background: var(--surface); font-size: 11px; text-transform: uppercase; }
+    .skill-bars { display: flex; flex-direction: column; gap: 3px; min-width: 115px; }
     .skill-line { display: flex; align-items: center; gap: 6px; font-size: 11px; font-family: var(--mono); color: var(--text-muted); }
-    .skill-bar-wrap { flex: 1; height: 4px; background: #334155; border-radius: 2px; overflow: hidden; }
+    .skill-bar-wrap { flex: 1; height: 4px; background: #26334d; border-radius: 2px; overflow: hidden; }
     .skill-bar-fill { height: 100%; background: var(--primary); }
-    .task-list { display: flex; flex-direction: column; gap: 10px; max-height: 500px; overflow-y: auto; }
+
+    .task-list { display: flex; flex-direction: column; gap: 10px; max-height: 520px; overflow-y: auto; padding-right: 4px; }
     .task-item {
-      background: #0f172a; border: 1px solid var(--card-border); border-left: 4px solid var(--primary);
-      border-radius: 8px; padding: 12px 15px; display: flex; flex-direction: column; gap: 6px;
+      background: var(--surface); border: 1px solid var(--card-border); border-left: 4px solid var(--primary);
+      border-radius: 8px; padding: 12px 15px; display: flex; flex-direction: column; gap: 6px; transition: border-color 0.2s;
     }
     .task-item.completed { border-left-color: var(--success); }
     .task-item.dispatched { border-left-color: var(--warning); }
@@ -87,15 +117,17 @@
     .task-item.failed { border-left-color: var(--danger); }
     .task-header, .task-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
     .task-footer { padding-top: 6px; border-top: 1px dashed var(--card-border); font-size: 12px; }
-    .task-deps { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
+    .task-deps { font-family: var(--mono); font-size: 11px; color: var(--text-muted); line-height: 1.6; }
+
     .code-box {
-      background: #090d16; border: 1px solid #334155; border-radius: 6px; padding: 9px 12px;
+      background: #070b14; border: 1px solid var(--card-border); border-radius: 6px; padding: 9px 12px;
       font-family: var(--mono); font-size: 12px; color: #38bdf8; display: flex; justify-content: space-between; align-items: center; gap: 10px;
     }
-    .progress-wrap { width: 100%; height: 8px; background: #0f172a; border-radius: 999px; overflow: hidden; border: 1px solid var(--card-border); }
-    .progress-bar { height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); width: 0%; transition: width 0.3s; }
+    .progress-wrap { width: 100%; height: 8px; background: var(--surface); border-radius: 999px; overflow: hidden; border: 1px solid var(--card-border); }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); width: 0%; transition: width 0.35s ease; }
+
     .modal-backdrop {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.72); backdrop-filter: blur(4px);
       z-index: 999; justify-content: center; align-items: center; padding: 20px;
     }
     .modal {
@@ -107,15 +139,27 @@
     .modal-footer { border-top: 1px solid var(--card-border); justify-content: flex-end; gap: 8px; }
     .modal-body { padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
     pre.code-view {
-      background: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 12px;
-      font-family: var(--mono); font-size: 12px; color: #e2e8f0; white-space: pre-wrap; max-height: 380px; overflow-y: auto;
+      background: #070b14; border: 1px solid var(--card-border); border-radius: 8px; padding: 14px;
+      font-family: var(--mono); font-size: 12px; color: #e2e8f0; white-space: pre-wrap; max-height: 400px; overflow-y: auto;
     }
     .console-log {
-      background: #090d16; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px;
-      font-family: var(--mono); font-size: 12px; color: #94a3b8; height: 130px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px;
+      background: #070b14; border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 12px;
+      font-family: var(--mono); font-size: 12px; color: #94a3b8; height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px;
     }
     .log-time { color: #64748b; margin-right: 8px; }
     .log-info { color: #38bdf8; } .log-success { color: #34d399; } .log-warn { color: #fbbf24; } .log-err { color: #f87171; }
+
+    /* Toast Notifications */
+    .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1100; display: flex; flex-direction: column; gap: 8px; max-width: 360px; }
+    .toast {
+      background: var(--card-bg); border: 1px solid var(--card-border); border-left: 4px solid var(--primary);
+      color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 13px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45); animation: slideIn 0.2s ease;
+    }
+    .toast.success { border-left-color: var(--success); }
+    .toast.warn { border-left-color: var(--warning); }
+    .toast.err { border-left-color: var(--danger); }
+    @keyframes slideIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   </style>
 </head>
 <body>
@@ -132,7 +176,7 @@
         <div class="network-badge">
           <span class="status-dot" id="serverDot"></span>
           <span id="masterIpLabel">Master IP: Connecting...</span>
-          <button class="btn btn-secondary btn-sm" onclick="copyMasterUrl()" title="Master URL kopyala">📋</button>
+          <button class="btn btn-secondary btn-sm" onclick="copyMasterUrl(this)" title="Master URL kopyala">📋</button>
         </div>
         <button class="btn btn-success btn-sm" id="connectMeBtn" onclick="connectMyMachine(false)">⚡ Tailscale ile Bağlan</button>
         <button class="btn btn-secondary btn-sm" onclick="toggleModal('settingsModal', true)">⚙️ Ayarlar</button>
@@ -140,12 +184,36 @@
       </div>
     </header>
 
+    <!-- KPI Summary Row -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <span class="kpi-label">Aktif Ajanlar (Online)</span>
+        <span class="kpi-value" id="kpiOnlineAgents" style="color:var(--success);">0 / 0</span>
+        <span class="kpi-sub" id="kpiBusyAgents">0 meşgul · 0 çevrimdışı</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Görev İlerlemesi</span>
+        <span class="kpi-value" id="kpiTaskProgress" style="color:var(--primary);">0%</span>
+        <span class="kpi-sub" id="kpiTaskCounts">0 / 0 görev tamamlandı</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Hata & Yeniden Deneme</span>
+        <span class="kpi-value" id="kpiFailures" style="color:var(--warning);">0</span>
+        <span class="kpi-sub" id="kpiRetriesSub">0 yeniden atama kaydı</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-label">Toplam İş Akışı Süresi</span>
+        <span class="kpi-value" id="kpiTotalTime" style="color:var(--info);">—</span>
+        <span class="kpi-sub" id="kpiAvgTime">Ortalama görev süresi: —</span>
+      </div>
+    </div>
+
     <!-- One-Click Tailscale Auto-Connect -->
     <div class="card" style="border-left: 4px solid var(--success);">
       <div class="card-header">
         <div class="card-title">🤝 Tek Tıkla Tailscale Katılımı (Otomatik IP & Model Algılama)</div>
         <div class="row-actions">
-          <button class="btn btn-success" onclick="connectMyMachine(false)">⚡ Beni & Modellerimi Bağla</button>
+          <button class="btn btn-success btn-sm" onclick="connectMyMachine(false)">⚡ Beni & Modellerimi Bağla</button>
           <button class="btn btn-primary btn-sm" onclick="connectMyMachine(true)">🔍 Tailscale Ağını Tara</button>
         </div>
       </div>
@@ -184,8 +252,8 @@
           </div>
         </div>
         <textarea id="reqText" placeholder="Yazılım gereksinimini buraya girin veya şablon seçin..."></textarea>
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <button class="btn btn-primary" onclick="decomposeRequirements()">🧩 Görevleri Ayrıştır & DAG Çıkar</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <button class="btn btn-primary" id="decomposeBtn" onclick="decomposeRequirements()">🧩 Görevleri Ayrıştır & DAG Çıkar</button>
           <span style="font-size:12px;color:var(--text-muted);" id="decompStatusLabel"></span>
         </div>
       </div>
@@ -199,12 +267,19 @@
           <span id="planProgressBadge" class="badge badge-blocked">0/0 Tamamlandı</span>
         </div>
         <div class="row-actions">
-          <button class="btn btn-success" id="autoRunBtn" onclick="runFullPlan()">🚀 Tüm Planı Otomatik Çalıştır (/plan/run)</button>
-          <button class="btn btn-primary btn-sm" onclick="dispatchNextReady()">▶️ Sıradaki Görevi Dağıt</button>
+          <button class="btn btn-success btn-sm" id="autoRunBtn" onclick="runFullPlan()">🚀 Tüm Planı Çalıştır (/plan/run)</button>
+          <button class="btn btn-primary btn-sm" onclick="dispatchNextReady()">▶️ Sıradakini Dağıt</button>
           <button class="btn btn-secondary btn-sm" onclick="syncAllWorkerResults()">🔄 Sonuçları Eşle</button>
         </div>
       </div>
       <div class="progress-wrap"><div class="progress-bar" id="planProgressBar"></div></div>
+      <div class="filter-bar" id="taskFilterBar">
+        <button class="filter-pill active" onclick="setTaskFilter('all', this)">Tümü</button>
+        <button class="filter-pill" onclick="setTaskFilter('pending', this)">Bekleyen</button>
+        <button class="filter-pill" onclick="setTaskFilter('dispatched', this)">Çalışan</button>
+        <button class="filter-pill" onclick="setTaskFilter('completed', this)">Tamamlanan</button>
+        <button class="filter-pill" onclick="setTaskFilter('failed', this)">Hatalı</button>
+      </div>
       <div class="task-list" id="taskListContainer"></div>
     </div>
 
@@ -218,14 +293,17 @@
     </div>
   </div>
 
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
   <!-- Output Modal -->
-  <div class="modal-backdrop" id="outputModal">
+  <div class="modal-backdrop" id="outputModal" onclick="backdropClose(event, 'outputModal')">
     <div class="modal">
       <div class="modal-header"><h3 id="modalTaskTitle">Görev Çıktısı</h3><button class="btn btn-secondary btn-sm" onclick="toggleModal('outputModal', false)">✕</button></div>
       <div class="modal-body">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <span id="modalTaskMeta" style="font-size:12px;color:var(--text-muted);"></span>
-          <button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('modalCodeView').innerText)">📋 Kopyala</button>
+          <button class="btn btn-primary btn-sm" onclick="copyText($('modalCodeView').innerText, this)">📋 Kopyala</button>
         </div>
         <pre class="code-view" id="modalCodeView"></pre>
       </div>
@@ -233,17 +311,17 @@
   </div>
 
   <!-- Add Agent Modal -->
-  <div class="modal-backdrop" id="addAgentModal">
+  <div class="modal-backdrop" id="addAgentModal" onclick="backdropClose(event, 'addAgentModal')">
     <div class="modal" style="max-width:480px;">
       <div class="modal-header"><h3>Yeni Worker Ajan Ekle</h3><button class="btn btn-secondary btn-sm" onclick="toggleModal('addAgentModal', false)">✕</button></div>
       <div class="modal-body">
-        <div><label style="font-size:12px;color:var(--text-muted);">Ajan ID</label><input id="regAgentId" placeholder="agent-a"></div>
+        <div><label style="font-size:12px;color:var(--text-muted);">Ajan ID</label><input id="regAgentId" placeholder="agent-eyad"></div>
         <div><label style="font-size:12px;color:var(--text-muted);">Tailscale Base URL</label><input id="regBaseUrl" placeholder="http://100.x.y.z:8001"></div>
         <div><label style="font-size:12px;color:var(--text-muted);">Ollama Modeli</label><input id="regModel" value="llama3.2:3b"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-          <div><label style="font-size:12px;color:var(--text-muted);">Coding</label><input type="number" id="regCoding" value="85"></div>
-          <div><label style="font-size:12px;color:var(--text-muted);">Reasoning</label><input type="number" id="regReasoning" value="85"></div>
-          <div><label style="font-size:12px;color:var(--text-muted);">Context</label><input type="number" id="regContext" value="80"></div>
+          <div><label style="font-size:12px;color:var(--text-muted);">Coding</label><input type="number" min="0" max="100" id="regCoding" value="85"></div>
+          <div><label style="font-size:12px;color:var(--text-muted);">Reasoning</label><input type="number" min="0" max="100" id="regReasoning" value="85"></div>
+          <div><label style="font-size:12px;color:var(--text-muted);">Context</label><input type="number" min="0" max="100" id="regContext" value="80"></div>
         </div>
       </div>
       <div class="modal-footer">
@@ -254,19 +332,19 @@
   </div>
 
   <!-- One-Click Tailscale Connect Modal -->
-  <div class="modal-backdrop" id="connectModal">
+  <div class="modal-backdrop" id="connectModal" onclick="backdropClose(event, 'connectModal')">
     <div class="modal" style="max-width:600px;">
       <div class="modal-header"><h3>⚡ Tailscale Worker Katılımı</h3><button class="btn btn-secondary btn-sm" onclick="closeConnectModal()">✕</button></div>
       <div class="modal-body">
         <div id="connectModalInfo" style="font-size:13px;color:var(--text-muted);"></div>
         <div>
-          <label style="font-size:12px;color:var(--text-muted);">Bağlanacak Ollama Modeli (otomatik algılananlar veya manuel):</label>
+          <label style="font-size:12px;color:var(--text-muted);">Bağlanacak Ollama Modeli:</label>
           <select id="connectModelSelect" onchange="updateJoinCmd()" style="margin-top:4px;"></select>
         </div>
         <div style="font-size:12px;color:var(--text-muted);">Terminalde bu tek komutu çalıştırın — ajan açıldığı an otomatik sisteme eklenecektir:</div>
         <div class="code-box">
           <code id="joinCmdText" style="word-break:break-all;"></code>
-          <button class="btn btn-primary btn-sm" onclick="copyJoinCmd()">📋 Kopyala</button>
+          <button class="btn btn-primary btn-sm" onclick="copyText($('joinCmdText').innerText, this)">📋 Kopyala</button>
         </div>
         <div style="font-size:12px;color:#34d399;" id="connectWaitStatus">🔄 Ajanınızın ayağa kalkması dinleniyor...</div>
       </div>
@@ -278,7 +356,7 @@
   </div>
 
   <!-- Settings Modal -->
-  <div class="modal-backdrop" id="settingsModal">
+  <div class="modal-backdrop" id="settingsModal" onclick="backdropClose(event, 'settingsModal')">
     <div class="modal" style="max-width:450px;">
       <div class="modal-header"><h3>Master API Ayarları</h3><button class="btn btn-secondary btn-sm" onclick="toggleModal('settingsModal', false)">✕</button></div>
       <div class="modal-body">
@@ -294,7 +372,7 @@
 
   <script>
     let API_BASE = localStorage.getItem("MASTER_API_URL") || (location.origin && !location.origin.startsWith("file") ? location.origin : "http://localhost:8000");
-    let agentsList = [], planTasks = [], connectPollTimer = null;
+    let agentsList = [], planTasks = [], connectPollTimer = null, currentFilter = "all";
 
     const PRESETS = {
       library: "Build a Library Management System with FastAPI REST endpoints, PostgreSQL schema, book borrowing & overdue fine calculation, and unit tests.",
@@ -303,17 +381,53 @@
     };
 
     const $ = id => document.getElementById(id);
+    const esc = str => String(str ?? "").replace(/[&<>"']/g, s => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]));
+
+    function toast(msg, type = "info") {
+      const box = $("toastContainer"), el = document.createElement("div");
+      el.className = `toast ${type}`;
+      el.textContent = msg;
+      box.appendChild(el);
+      setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.remove(), 250); }, 3500);
+    }
+
     function toggleModal(id, show) {
       if (id === 'settingsModal' && show) $('customApiUrl').value = API_BASE;
       $(id).style.display = show ? "flex" : "none";
     }
+    function backdropClose(e, id) { if (e.target.id === id) id === "connectModal" ? closeConnectModal() : toggleModal(id, false); }
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") {
+        ["outputModal", "addAgentModal", "settingsModal"].forEach(id => toggleModal(id, false));
+        closeConnectModal();
+      }
+    });
+
+    function copyText(text, btn) {
+      navigator.clipboard.writeText(text);
+      if (btn) { const orig = btn.innerText; btn.innerText = "✓ Kopyalandı"; setTimeout(() => btn.innerText = orig, 1500); }
+      toast("Panoya kopyalandı.", "success");
+    }
+    function copyMasterUrl(btn) { copyText(API_BASE, btn); log(`Master URL kopyalandı: ${API_BASE}`); }
+
     function log(msg, type = "info") {
       const box = $("consoleLogs"), div = document.createElement("div");
-      div.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString()}]</span><span class="log-${type}">${msg}</span>`;
+      div.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString()}]</span><span class="log-${type}">${esc(msg)}</span>`;
       box.appendChild(div); box.scrollTop = box.scrollHeight;
     }
+
     function loadPreset() { const v = $("presetSelect").value; if (PRESETS[v]) $("reqText").value = PRESETS[v]; }
-    function copyMasterUrl() { navigator.clipboard.writeText(API_BASE); log(`Master URL kopyalandı: ${API_BASE}`); }
+    function setTaskFilter(filter, btn) {
+      currentFilter = filter;
+      document.querySelectorAll("#taskFilterBar .filter-pill").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      renderTasks();
+    }
+
+    function fmtMs(ms) {
+      if (ms == null || isNaN(ms)) return null;
+      return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+    }
 
     async function detectLocalOllamaModels() {
       try {
@@ -331,7 +445,6 @@
       const q = model ? `?model=${encodeURIComponent(model)}` : "";
       $("joinCmdText").innerText = `curl -sSL '${API_BASE}/api/v1/agents/join.sh${q}' | bash`;
     }
-    function copyJoinCmd() { navigator.clipboard.writeText($("joinCmdText").innerText); log("Katılım komutu kopyalandı!", "success"); }
     function closeConnectModal() {
       if (connectPollTimer) { clearInterval(connectPollTimer); connectPollTimer = null; }
       toggleModal("connectModal", false);
@@ -353,33 +466,30 @@
         const data = await res.json();
         if (data.connected && data.connected.length > 0) {
           const names = data.connected.map(a => `${a.agent_id} (${a.model})`).join(", ");
-          $("connectStatusText").innerHTML = `✅ Bağlandı: <strong style="color:#34d399;">${names}</strong> (IP: ${data.client_ip})`;
+          $("connectStatusText").innerHTML = `✅ Bağlandı: <strong style="color:#34d399;">${esc(names)}</strong> (IP: ${esc(data.client_ip)})`;
           log(`✅ Tailscale otomatik bağlantı başarılı: ${names}`, "success");
+          toast(`Bağlandı: ${names}`, "success");
           closeConnectModal();
           await loadAgents();
           return true;
         }
         if (silent) return false;
-
         if (scanTailnet) {
           $("connectStatusText").innerText = `⚠️ ${data.peers_scanned} Tailscale düğümü tarandı; çalışan yeni worker agent bulunamadı.`;
           log(`Tailscale taraması (${data.peers_scanned} düğüm): yeni aktif worker bulunamadı.`, "warn");
           return false;
         }
-
         const models = data.detected_models || [];
-        $("connectModalInfo").innerHTML = `Algılanan Tailscale IP: <strong style="color:#38bdf8;">${data.client_ip}</strong>` +
-          (models.length ? ` | Bulunan Ollama modelleri: <strong>${models.join(", ")}</strong>` : " | Yerel worker henüz açık değil.");
+        $("connectModalInfo").innerHTML = `Algılanan Tailscale IP: <strong style="color:#38bdf8;">${esc(data.client_ip)}</strong>` +
+          (models.length ? ` | Bulunan Ollama modelleri: <strong>${esc(models.join(", "))}</strong>` : " | Yerel worker henüz açık değil.");
         const sel = $("connectModelSelect");
-        sel.innerHTML = (models.length ? models : ["auto"]).map(m => `<option value="${m === 'auto' ? '' : m}">${m === 'auto' ? 'Otomatik (kurulu ilk Ollama modeli)' : m}</option>`).join("");
+        sel.innerHTML = (models.length ? models : ["auto"]).map(m => `<option value="${m === 'auto' ? '' : esc(m)}">${m === 'auto' ? 'Otomatik (kurulu ilk Ollama modeli)' : esc(m)}</option>`).join("");
         updateJoinCmd();
         toggleModal("connectModal", true);
-        if (!connectPollTimer) {
-          connectPollTimer = setInterval(() => connectMyMachine(false, true), 3000);
-        }
+        if (!connectPollTimer) connectPollTimer = setInterval(() => connectMyMachine(false, true), 3000);
         log(`Tailscale IP (${data.client_ip}) algılandı; yerel worker başlatılması bekleniyor.`, "info");
       } catch (e) {
-        if (!silent) log(`Bağlantı hatası: ${e.message}`, "err");
+        if (!silent) { log(`Bağlantı hatası: ${e.message}`, "err"); toast(`Bağlantı hatası: ${e.message}`, "err"); }
       }
       return false;
     }
@@ -401,25 +511,32 @@
         const res = await fetch(`${API_BASE}/api/v1/agents/health`);
         agentsList = await res.json();
         $("agentCountBadge").innerText = `${agentsList.length} Ajan`;
+
+        const idle = agentsList.filter(a => a.status === "idle").length;
+        const busy = agentsList.filter(a => a.status === "busy").length;
+        const offline = agentsList.length - idle - busy;
+        $("kpiOnlineAgents").innerText = `${idle + busy} / ${agentsList.length}`;
+        $("kpiBusyAgents").innerText = `${busy} meşgul · ${offline} çevrimdışı`;
+
         const tbody = $("agentsTbody");
         if (!agentsList.length) {
           tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-muted);">Kayıtlı ajan yok.</td></tr>`;
           return;
         }
         tbody.innerHTML = agentsList.map(a => {
-          const badge = a.status === "idle" ? `<span class="badge badge-idle">🟢 IDLE</span>` : a.status === "busy" ? `<span class="badge badge-busy">🟡 BUSY</span>` : `<span class="badge badge-offline">Offline</span>`;
+          const badge = a.status === "idle" ? `<span class="badge badge-idle">🟢 IDLE</span>` : a.status === "busy" ? `<span class="badge badge-busy">🟡 BUSY</span>` : `<span class="badge badge-offline">🔴 OFFLINE</span>`;
           const { coding: c = 50, reasoning: r = 50, context: x = 50 } = a.capabilities || {};
           return `<tr>
             <td>${badge}</td>
-            <td><div style="font-weight:600;">${a.agent_id}</div><div style="font-size:11px;color:var(--text-muted);font-family:var(--mono);">${a.model}</div></td>
-            <td style="font-family:var(--mono);font-size:12px;">${a.base_url ? `<a href="${a.base_url}/agent/v1/health" target="_blank" style="color:var(--info);text-decoration:none;">${a.base_url}</a>` : '-'}</td>
+            <td><div style="font-weight:600;">${esc(a.agent_id)}</div><div style="font-size:11px;color:var(--text-muted);font-family:var(--mono);">${esc(a.model)}</div></td>
+            <td style="font-family:var(--mono);font-size:12px;">${a.base_url ? `<a href="${esc(a.base_url)}/agent/v1/health" target="_blank" style="color:var(--info);text-decoration:none;">${esc(a.base_url)}</a>` : '-'}</td>
             <td><div class="skill-bars">
               <div class="skill-line"><span>C</span><div class="skill-bar-wrap"><div class="skill-bar-fill" style="width:${c}%"></div></div><span>${c}</span></div>
               <div class="skill-line"><span>R</span><div class="skill-bar-wrap"><div class="skill-bar-fill" style="width:${r}%;background:var(--purple)"></div></div><span>${r}</span></div>
               <div class="skill-line"><span>X</span><div class="skill-bar-wrap"><div class="skill-bar-fill" style="width:${x}%;background:var(--info)"></div></div><span>${x}</span></div>
             </div></td>
             <td>${a.queue_size || 0}/${a.max_queue || 5}</td>
-            <td><button class="btn btn-danger btn-sm" onclick="deleteAgent('${a.agent_id}')">🗑️</button></td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteAgent('${esc(a.agent_id)}')">🗑️</button></td>
           </tr>`;
         }).join("");
       } catch (e) { log(`Ajan listesi alınamadı: ${e.message}`, "err"); }
@@ -430,26 +547,29 @@
         const res = await fetch(`${API_BASE}/api/v1/agents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         if (!res.ok) throw new Error((await res.json()).detail || "Kayıt başarısız");
         log(`Ajan kaydedildi: ${payload.agent_id}`, "success");
+        toast(`Ajan kaydedildi: ${payload.agent_id}`, "success");
         toggleModal("addAgentModal", false); loadAgents();
-      } catch (e) { log(`Ajan kaydedilemedi: ${e.message}`, "err"); alert(e.message); }
+      } catch (e) { log(`Ajan kaydedilemedi: ${e.message}`, "err"); toast(e.message, "err"); }
     }
 
     function submitRegisterAgent() {
       const agent_id = $("regAgentId").value.trim(), base_url = $("regBaseUrl").value.trim() || null, model = $("regModel").value.trim();
-      if (!agent_id || !model) return alert("Ajan ID ve Model zorunludur.");
+      if (!agent_id || !model) return toast("Ajan ID ve Model zorunludur.", "warn");
       registerAgentPayload({ agent_id, base_url, model, capabilities: { coding: +$("regCoding").value || 0, reasoning: +$("regReasoning").value || 0, context: +$("regContext").value || 0 } });
     }
 
     async function deleteAgent(id) {
       if (!confirm(`'${id}' ajanını silmek istediğinize emin misiniz?`)) return;
-      await fetch(`${API_BASE}/api/v1/agents/${id}`, { method: "DELETE" });
-      log(`Ajan silindi: ${id}`, "warn"); loadAgents();
+      await fetch(`${API_BASE}/api/v1/agents/${encodeURIComponent(id)}`, { method: "DELETE" });
+      log(`Ajan silindi: ${id}`, "warn"); toast(`Ajan silindi: ${id}`, "warn"); loadAgents();
     }
 
     async function decomposeRequirements() {
       const text = $("reqText").value.trim();
-      if (!text) return alert("Lütfen bir gereksinim metni girin.");
-      $("decompStatusLabel").innerText = "Ayrıştırılıyor...";
+      if (!text) return toast("Lütfen bir gereksinim metni girin.", "warn");
+      const btn = $("decomposeBtn");
+      btn.disabled = true; btn.innerText = "⏳ Ayrıştırılıyor...";
+      $("decompStatusLabel").innerText = "Ollama işliyor...";
       log("Gereksinim metni alt görevlere ayrıştırılıyor...", "info");
       try {
         const res = await fetch(`${API_BASE}/api/v1/requirements/decompose_and_map`, {
@@ -458,84 +578,140 @@
         if (!res.ok) throw new Error((await res.json()).detail || "Ayrıştırma hatası");
         const tasks = await res.json();
         log(`${tasks.length} alt görev ve DAG oluşturuldu.`, "success");
+        toast(`${tasks.length} alt görev oluşturuldu.`, "success");
         loadPlanTasks();
-      } catch (e) { log(`Ayrıştırma hatası: ${e.message}`, "err"); alert(e.message); }
+      } catch (e) {
+        log(`Ayrıştırma hatası: ${e.message}`, "err");
+        toast(`Ayrıştırma hatası: ${e.message}`, "err");
+      } finally {
+        btn.disabled = false; btn.innerText = "🧩 Görevleri Ayrıştır & DAG Çıkar";
+      }
     }
 
     async function resetPlan() {
       await fetch(`${API_BASE}/api/v1/plan/reset`, { method: "POST" });
-      log("Görev planı sıfırlandı.", "info"); loadPlanTasks();
+      $("decompStatusLabel").innerText = "";
+      log("Görev planı sıfırlandı.", "info"); toast("Plan sıfırlandı.", "info"); loadPlanTasks();
+    }
+
+    function updateTaskKpis() {
+      const total = planTasks.length;
+      const done = planTasks.filter(t => t.status === "completed").length;
+      const failed = planTasks.filter(t => t.status === "failed").length;
+      const retries = planTasks.reduce((acc, t) => acc + Math.max(0, (t.attempts?.length || 0) - 1), 0);
+      const pct = total ? Math.round((done / total) * 100) : 0;
+
+      $("kpiTaskProgress").innerText = `${pct}%`;
+      $("kpiTaskCounts").innerText = `${done} / ${total} görev tamamlandı`;
+      $("kpiFailures").innerText = `${failed}`;
+      $("kpiFailures").style.color = failed > 0 ? "var(--danger)" : "var(--success)";
+      $("kpiRetriesSub").innerText = `${retries} yeniden atama kaydı`;
+
+      const durations = planTasks.map(t => t.duration_ms ?? t.execution_ms ?? t.timing?.duration_ms).filter(v => v != null);
+      if (durations.length) {
+        const sum = durations.reduce((a, b) => a + b, 0);
+        $("kpiTotalTime").innerText = fmtMs(sum);
+        $("kpiAvgTime").innerText = `Ortalama görev süresi: ${fmtMs(sum / durations.length)}`;
+      } else {
+        $("kpiTotalTime").innerText = "—";
+        $("kpiAvgTime").innerText = "Ortalama görev süresi: —";
+      }
+    }
+
+    function renderTasks() {
+      const container = $("taskListContainer"), badge = $("planProgressBadge"), bar = $("planProgressBar");
+      if (!planTasks.length) {
+        container.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-muted);">Henüz ayrıştırılmış bir görev planı yok.</div>`;
+        badge.innerText = "0/0 Tamamlandı"; badge.className = "badge badge-blocked"; bar.style.width = "0%"; return;
+      }
+      const done = planTasks.filter(t => t.status === "completed").length, pct = Math.round((done / planTasks.length) * 100);
+      badge.innerText = `${done}/${planTasks.length} Tamamlandı (%${pct})`;
+      badge.className = pct === 100 ? "badge badge-completed" : "badge badge-pending";
+      bar.style.width = `${pct}%`;
+
+      const byId = Object.fromEntries(planTasks.map(t => [t.task_uuid, t.label]));
+      const badges = {
+        pending: `<span class="badge badge-pending">PENDING</span>`,
+        blocked: `<span class="badge badge-blocked">BLOCKED</span>`,
+        dispatched: `<span class="badge badge-dispatched">🚀 DISPATCHED</span>`,
+        completed: `<span class="badge badge-completed">✅ COMPLETED</span>`,
+        failed: `<span class="badge badge-failed">❌ FAILED</span>`
+      };
+
+      const filtered = currentFilter === "all" ? planTasks : planTasks.filter(t => t.status === currentFilter);
+      if (!filtered.length) {
+        container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted);">Bu filtrede görev bulunmuyor.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(t => {
+        const deps = (t.dependency_uuids || []).map(id => byId[id] || id.slice(0, 4)).join(", ") || "Yok";
+        const c = t.required_capabilities || {};
+        const attempts = (t.attempts || []).map(a => `${a.agent_id || '?'}:${a.outcome}`).join(" → ");
+        const dur = fmtMs(t.duration_ms ?? t.execution_ms ?? t.timing?.duration_ms);
+        const qTime = fmtMs(t.queue_ms ?? t.timing?.queue_ms);
+        return `<div class="task-item ${esc(t.status)}">
+          <div class="task-header">
+            <div><strong style="font-family:var(--mono);color:var(--primary);">[${esc(t.label)}]</strong> <strong>${esc(t.title)}</strong> <span class="badge badge-type">${esc(t.category)}</span></div>
+            <div class="row-actions">
+              ${dur ? `<span class="badge badge-time">⏱ ${dur}${qTime ? ` (q:${qTime})` : ''}</span>` : ''}
+              ${badges[t.status] || esc(t.status)}
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);">${esc(t.description)}</div>
+          <div class="task-footer">
+            <div class="task-deps">
+              Önkoşul: <strong>${esc(deps)}</strong> | Gereksinim: <strong>C:${c.coding||0} R:${c.reasoning||0} X:${c.context||0}</strong>
+              ${t.assigned_agent ? ` | <span style="color:#38bdf8;">Ajan: <strong>${esc(t.assigned_agent)}</strong></span>` : ''}
+              ${attempts ? ` | <span style="color:#a78bfa;">Denemeler: ${esc(attempts)}</span>` : ''}
+            </div>
+            <div class="row-actions">
+              ${t.status === "pending" ? `<button class="btn btn-primary btn-sm" onclick="dispatchSpecificTask('${esc(t.task_uuid)}')">🚀 Dağıt</button>` : ''}
+              ${t.status === "dispatched" ? `<button class="btn btn-secondary btn-sm" onclick="pollTask('${esc(t.task_uuid)}')">🔄 Eşle</button>` : ''}
+              ${t.status === "completed" ? `<button class="btn btn-success btn-sm" onclick="viewTaskOutput('${esc(t.task_uuid)}')">📄 Çıktıyı Gör</button>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join("");
     }
 
     async function loadPlanTasks() {
       try {
         const res = await fetch(`${API_BASE}/api/v1/plan/tasks`);
         planTasks = await res.json();
-        const container = $("taskListContainer"), badge = $("planProgressBadge"), bar = $("planProgressBar");
-        if (!planTasks.length) {
-          container.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-muted);">Henüz ayrıştırılmış bir görev planı yok.</div>`;
-          badge.innerText = "0/0 Tamamlandı"; bar.style.width = "0%"; return;
+        updateTaskKpis();
+        renderTasks();
+        if (planTasks.length) {
+          try {
+            const info = await (await fetch(`${API_BASE}/api/v1/plan/info`)).json();
+            if (info.project_title) {
+              $("decompStatusLabel").innerHTML = `${esc(info.project_title)} <span class="badge ${info.is_mock ? 'badge-blocked' : 'badge-completed'}">${info.is_mock ? 'Mock Fallback' : '🟢 Canlı Ollama'}</span>`;
+            }
+          } catch {}
         }
-        const done = planTasks.filter(t => t.status === "completed").length, pct = Math.round((done / planTasks.length) * 100);
-        badge.innerText = `${done}/${planTasks.length} Tamamlandı (%${pct})`;
-        badge.className = pct === 100 ? "badge badge-completed" : "badge badge-pending";
-        bar.style.width = `${pct}%`;
-
-        try {
-          const info = await (await fetch(`${API_BASE}/api/v1/plan/info`)).json();
-          if (info.project_title) {
-            $("decompStatusLabel").innerHTML = `${info.project_title} <span class="badge ${info.is_mock ? 'badge-blocked' : 'badge-completed'}">${info.is_mock ? 'Mock Fallback' : '🟢 Canlı Ollama'}</span>`;
-          }
-        } catch {}
-
-        const byId = Object.fromEntries(planTasks.map(t => [t.task_uuid, t.label]));
-        const badges = {
-          pending: `<span class="badge badge-pending">PENDING</span>`,
-          blocked: `<span class="badge badge-blocked">BLOCKED</span>`,
-          dispatched: `<span class="badge badge-dispatched">🚀 DISPATCHED</span>`,
-          completed: `<span class="badge badge-completed">✅ COMPLETED</span>`,
-          failed: `<span class="badge badge-failed">❌ FAILED</span>`
-        };
-
-        container.innerHTML = planTasks.map(t => {
-          const deps = (t.dependency_uuids || []).map(id => byId[id] || id.slice(0, 4)).join(", ") || "Yok";
-          const c = t.required_capabilities || {};
-          const attempts = (t.attempts || []).map(a => `${a.agent_id || '?'}:${a.outcome}`).join(" → ");
-          return `<div class="task-item ${t.status}">
-            <div class="task-header">
-              <div><strong style="font-family:var(--mono);color:var(--primary);">[${t.label}]</strong> <strong>${t.title}</strong> <span class="badge badge-type">${t.category}</span></div>
-              <div>${badges[t.status] || t.status}</div>
-            </div>
-            <div style="font-size:12px;color:var(--text-muted);">${t.description}</div>
-            <div class="task-footer">
-              <div class="task-deps">
-                Önkoşul: <strong>${deps}</strong> | Gereksinim: <strong>C:${c.coding||0} R:${c.reasoning||0} X:${c.context||0}</strong>
-                ${t.assigned_agent ? ` | <span style="color:#38bdf8;">Ajan: <strong>${t.assigned_agent}</strong></span>` : ''}
-                ${attempts ? ` | <span style="color:#a78bfa;">Denemeler: ${attempts}</span>` : ''}
-              </div>
-              <div class="row-actions">
-                ${t.status === "pending" ? `<button class="btn btn-primary btn-sm" onclick="dispatchSpecificTask('${t.task_uuid}')">🚀 Dağıt</button>` : ''}
-                ${t.status === "dispatched" ? `<button class="btn btn-secondary btn-sm" onclick="pollTask('${t.task_uuid}')">🔄 Eşle</button>` : ''}
-                ${t.status === "completed" ? `<button class="btn btn-success btn-sm" onclick="viewTaskOutput('${t.task_uuid}')">📄 Çıktıyı Gör</button>` : ''}
-              </div>
-            </div>
-          </div>`;
-        }).join("");
       } catch (e) { console.error(e); }
     }
 
     async function runFullPlan() {
+      const btn = $("autoRunBtn");
+      btn.disabled = true; btn.innerText = "⏳ Başlatılıyor...";
       try {
         const res = await fetch(`${API_BASE}/api/v1/plan/run`, { method: "POST" });
         if (!res.ok) throw new Error((await res.json()).detail || "Plan başlatılamadı");
-        log("🚀 Otomatik plan yürütme (/api/v1/plan/run) başlatıldı! Sonuçlar ve hata telafisi otomatik yönetiliyor.", "success");
+        log("🚀 Otomatik plan yürütme (/api/v1/plan/run) başlatıldı!", "success");
+        toast("Otomatik plan yürütme başlatıldı!", "success");
         loadPlanTasks(); loadAgents();
-      } catch (e) { log(`Plan çalıştırma hatası: ${e.message}`, "err"); alert(e.message); }
+      } catch (e) {
+        log(`Plan çalıştırma hatası: ${e.message}`, "err");
+        toast(e.message, "err");
+      } finally {
+        btn.disabled = false; btn.innerText = "🚀 Tüm Planı Çalıştır (/plan/run)";
+      }
     }
 
     async function dispatchNextReady() {
       const ready = await (await fetch(`${API_BASE}/api/v1/plan/ready`)).json();
-      if (!ready.length) return log("Dağıtıma hazır görev yok.", "warn");
+      if (!ready.length) return toast("Dağıtıma hazır görev yok.", "warn");
       await dispatchSpecificTask(ready[0].task_uuid);
     }
 
@@ -546,8 +722,9 @@
         if (!res.ok) throw new Error((await res.json()).detail || "Dağıtılamadı");
         const rec = await res.json();
         log(`[Kabul Edildi] '${spec.title}' -> '${rec.task.agent_id}' (${rec.round_trip_ms} ms)`, "success");
+        toast(`Görev dağıtıldı -> ${rec.task.agent_id}`, "success");
         loadPlanTasks(); loadAgents();
-      } catch (e) { log(`Dağıtım hatası: ${e.message}`, "err"); alert(e.message); }
+      } catch (e) { log(`Dağıtım hatası: ${e.message}`, "err"); toast(e.message, "err"); }
     }
 
     async function pollTask(uuid) {
@@ -558,6 +735,7 @@
 
     async function syncAllWorkerResults() {
       for (const t of planTasks.filter(t => t.status === "dispatched")) await pollTask(t.task_uuid);
+      toast("Worker sonuçları eşlendi.", "info");
     }
 
     function viewTaskOutput(uuid) {
@@ -573,7 +751,7 @@
       const v = $("customApiUrl").value.trim();
       if (v) { API_BASE = v; localStorage.setItem("MASTER_API_URL", v); }
       else { localStorage.removeItem("MASTER_API_URL"); API_BASE = location.origin; }
-      toggleModal("settingsModal", false); refreshAll();
+      toggleModal("settingsModal", false); toast("Ayarlar kaydedildi.", "success"); refreshAll();
     }
 
     async function refreshAll() { await fetchSystemInfo(); await loadAgents(); await loadPlanTasks(); }
