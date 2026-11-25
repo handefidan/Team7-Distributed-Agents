@@ -51,7 +51,7 @@ def infer_capabilities(model: str) -> CapabilityScores:
         return CapabilityScores(coding=92, reasoning=74, context=72)
     # 2. Phi-4 Mini (3.8B) & DeepSeek -> DATABASE, TESTING, REVIEW
     if any(k in name for k in ("phi", "r1", "deepseek")):
-        return CapabilityScores(coding=74, reasoning=92, context=70)
+        return CapabilityScores(coding=74, reasoning=92, context=68)
     # 3. Gemma 3 (4B) & Mistral -> REQUIREMENTS
     if any(k in name for k in ("gemma", "mistral")):
         return CapabilityScores(coding=66, reasoning=86, context=82)
