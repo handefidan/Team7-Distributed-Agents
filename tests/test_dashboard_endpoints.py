@@ -228,7 +228,63 @@ def test_auto_connect_returns_join_command_when_no_worker():
         assert script.status_code == 200
         assert 'MODEL="gemma3:4brm-rf/"' in script.text
         assert ";" not in script.text.split('MODEL="')[1].split('"')[0]
-        assert "exec python3 -m agent.main" in script.text
+        assert 'exec "$PY" -m agent.main' in script.text
+
+
+def test_system_logs_records_api_requests_and_clears():
+    app = create_master(agents_file=None)
+    with TestClient(app) as client:
+        # Quiet polling GETs should not flood logs
+        client.get("/api/v1/agents/health")
+        assert client.get("/api/v1/system/logs").json() == []
+
+        # Incoming peer API calls are recorded
+        client.post(
+            "/api/v1/agents",
+            json={"agent_id": "peer-1", "base_url": "http://100.85.1.2:8001", "model": "llama3.2:3b"},
+        )
+        logs = client.get("/api/v1/system/logs").json()
+        assert len(logs) == 1
+        assert logs[0]["method"] == "POST"
+        assert logs[0]["path"] == "/api/v1/agents"
+        assert logs[0]["status"] == 201
+
+        assert client.delete("/api/v1/system/logs").status_code == 200
+        assert client.get("/api/v1/system/logs").json() == []
+
+
+def test_ollama_models_endpoint_and_auto_resolve():
+    def mock_ollama(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json={"models": [{"name": "llama3.2:3b"}, {"name": "qwen3:8b"}]})
+        body = json.loads(request.content)
+        assert body["model"] == "qwen3:8b"
+        return httpx.Response(
+            200,
+            json={
+                "response": json.dumps({
+                    "project_title": "Demo Chat",
+                    "summary": "Live Ollama chat plan",
+                    "tasks": [
+                        {"task_id": "T1", "title": "Schema", "category": "database", "description": "DB", "dependencies": []}
+                    ],
+                })
+            },
+        )
+
+    app = create_master(ollama_transport=httpx.MockTransport(mock_ollama), agents_file=None)
+    with TestClient(app) as client:
+        info = client.get("/api/v1/ollama/models").json()
+        assert info["available"] is True
+        assert info["models"] == ["llama3.2:3b", "qwen3:8b"]
+        assert info["default_model"] == "llama3.2:3b"
+
+        tasks = client.post(
+            "/api/v1/requirements/decompose_and_map",
+            json={"requirement_text": "Build a chat app", "model": "qwen3:8b"},
+        ).json()
+        assert len(tasks) == 1
+        assert tasks[0]["title"] == "Schema"
 
 
 def test_agent_auto_registers_to_master_on_startup():

@@ -184,8 +184,13 @@
           </div>
         </div>
         <textarea id="reqText" placeholder="Yazılım gereksinimini buraya girin veya şablon seçin..."></textarea>
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <button class="btn btn-primary" onclick="decomposeRequirements()">🧩 Görevleri Ayrıştır & DAG Çıkar</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div class="row-actions">
+            <select id="ollamaModelSelect" title="Yerel Ollama Modeli" style="width:auto;font-size:12px;padding:6px 10px;">
+              <option value="">🤖 Ollama Modeli Yükleniyor...</option>
+            </select>
+            <button class="btn btn-primary" id="decomposeBtn" onclick="decomposeRequirements()">🧩 Yerel Ollama ile Ayrıştır (Decompose)</button>
+          </div>
           <span style="font-size:12px;color:var(--text-muted);" id="decompStatusLabel"></span>
         </div>
       </div>
@@ -208,13 +213,21 @@
       <div class="task-list" id="taskListContainer"></div>
     </div>
 
+    <!-- Direct Dispatched Tasks (non-plan API calls) -->
+    <div class="card" id="directTasksCard" style="display:none;">
+      <div class="card-header">
+        <div class="card-title">📨 Doğrudan API ile Gönderilen Görevler <span id="directTaskCountBadge" class="badge badge-pending">0</span></div>
+      </div>
+      <div class="task-list" id="directTaskListContainer" style="max-height:260px;"></div>
+    </div>
+
     <!-- Console Logs -->
     <div class="card">
       <div class="card-header">
-        <div class="card-title">📡 Canlı Sistem & Ağ Telemetri Günlüğü</div>
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('consoleLogs').innerHTML=''">Temizle</button>
+        <div class="card-title">📡 Canlı Sistem & Ağ Telemetri Günlüğü <span id="serverLogCountBadge" class="badge badge-pending">0 API İsteği</span></div>
+        <button class="btn btn-secondary btn-sm" onclick="clearAllLogs()">Temizle</button>
       </div>
-      <div class="console-log" id="consoleLogs"></div>
+      <div class="console-log" id="consoleLogs" style="height:190px;"></div>
     </div>
   </div>
 
@@ -294,7 +307,7 @@
 
   <script>
     let API_BASE = localStorage.getItem("MASTER_API_URL") || (location.origin && !location.origin.startsWith("file") ? location.origin : "http://localhost:8000");
-    let agentsList = [], planTasks = [], connectPollTimer = null;
+    let agentsList = [], planTasks = [], localLogs = [], serverLogs = [], connectPollTimer = null;
 
     const PRESETS = {
       library: "Build a Library Management System with FastAPI REST endpoints, PostgreSQL schema, book borrowing & overdue fine calculation, and unit tests.",
@@ -307,10 +320,59 @@
       if (id === 'settingsModal' && show) $('customApiUrl').value = API_BASE;
       $(id).style.display = show ? "flex" : "none";
     }
+    function renderLogs() {
+      const box = $("consoleLogs");
+      const apiLines = serverLogs.map(e => {
+        const cls = e.status >= 400 ? "log-err" : e.status >= 300 ? "log-warn" : "log-success";
+        return `<div><span class="log-time">[${e.time}]</span><span class="${cls}">[API ${e.client_ip}] ${e.method} ${e.path} → ${e.status} (${e.ms} ms)</span></div>`;
+      });
+      const uiLines = localLogs.map(e => `<div><span class="log-time">[${e.time}]</span><span class="log-${e.type}">${e.msg}</span></div>`);
+      box.innerHTML = [...apiLines, ...uiLines].join("") || `<div style="color:var(--text-muted);">Henüz kayıt yok.</div>`;
+      box.scrollTop = box.scrollHeight;
+    }
     function log(msg, type = "info") {
-      const box = $("consoleLogs"), div = document.createElement("div");
-      div.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString()}]</span><span class="log-${type}">${msg}</span>`;
-      box.appendChild(div); box.scrollTop = box.scrollHeight;
+      localLogs.push({ time: new Date().toLocaleTimeString(), msg, type });
+      if (localLogs.length > 50) localLogs.shift();
+      renderLogs();
+    }
+    async function loadServerLogs() {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/system/logs`);
+        if (!res.ok) return;
+        serverLogs = await res.json();
+        $("serverLogCountBadge").innerText = `${serverLogs.length} API İsteği`;
+        renderLogs();
+      } catch {}
+    }
+    async function clearAllLogs() {
+      localLogs = []; serverLogs = [];
+      try { await fetch(`${API_BASE}/api/v1/system/logs`, { method: "DELETE" }); } catch {}
+      $("serverLogCountBadge").innerText = "0 API İsteği";
+      renderLogs();
+    }
+    async function loadDirectTasks() {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/tasks`);
+        if (!res.ok) return;
+        const all = await res.json();
+        const planIds = new Set(planTasks.map(t => t.task_uuid));
+        const direct = all.filter(r => !planIds.has(r.task.task_id));
+        const card = $("directTasksCard");
+        if (!direct.length) { card.style.display = "none"; return; }
+        card.style.display = "flex";
+        $("directTaskCountBadge").innerText = direct.length;
+        $("directTaskListContainer").innerHTML = direct.slice().reverse().map(r => {
+          const st = r.status;
+          const badgeCls = st === "acknowledged" ? "badge-completed" : st === "rejected" ? "badge-dispatched" : "badge-failed";
+          return `<div class="task-item ${st === 'acknowledged' ? 'completed' : 'failed'}">
+            <div class="task-header">
+              <div><strong>${r.task.title}</strong> <span class="badge badge-type">${r.task.type}</span></div>
+              <span class="badge ${badgeCls}">${st.toUpperCase()}</span>
+            </div>
+            <div class="task-deps">Ajan: <strong>${r.task.agent_id}</strong> | ID: ${r.task.task_id.slice(0,8)}${r.round_trip_ms ? ` | ${r.round_trip_ms} ms` : ''}${r.error ? ` | <span style="color:#f87171;">${r.error}</span>` : ''}</div>
+          </div>`;
+        }).join("");
+      } catch {}
     }
     function loadPreset() { const v = $("presetSelect").value; if (PRESETS[v]) $("reqText").value = PRESETS[v]; }
     function copyMasterUrl() { navigator.clipboard.writeText(API_BASE); log(`Master URL kopyalandı: ${API_BASE}`); }
@@ -446,20 +508,49 @@
       log(`Ajan silindi: ${id}`, "warn"); loadAgents();
     }
 
+    async function loadOllamaModels() {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/ollama/models`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const sel = $("ollamaModelSelect");
+        const prev = sel.value;
+        if (data.models && data.models.length) {
+          sel.innerHTML = data.models.map(m => `<option value="${m}">🤖 ${m}</option>`).join("");
+          sel.value = (prev && data.models.includes(prev)) ? prev : data.default_model;
+        } else {
+          sel.innerHTML = `<option value="">⚠️ Ollama çevrimdışı (Fallback)</option>`;
+        }
+      } catch {}
+    }
+
     async function decomposeRequirements() {
       const text = $("reqText").value.trim();
       if (!text) return alert("Lütfen bir gereksinim metni girin.");
-      $("decompStatusLabel").innerText = "Ayrıştırılıyor...";
-      log("Gereksinim metni alt görevlere ayrıştırılıyor...", "info");
+      const model = $("ollamaModelSelect").value || null;
+      const btn = $("decomposeBtn");
+      btn.disabled = true;
+      btn.innerText = "⏳ Ollama ayrıştırıyor...";
+      $("decompStatusLabel").innerText = `Yerel Ollama (${model || 'otomatik'}) çalışıyor...`;
+      log(`Gereksinim yerel Ollama (${model || 'otomatik'}) ile alt görevlere ayrıştırılıyor...`, "info");
       try {
         const res = await fetch(`${API_BASE}/api/v1/requirements/decompose_and_map`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requirement_text: text })
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requirement_text: text, model })
         });
         if (!res.ok) throw new Error((await res.json()).detail || "Ayrıştırma hatası");
         const tasks = await res.json();
-        log(`${tasks.length} alt görev ve DAG oluşturuldu.`, "success");
-        loadPlanTasks();
-      } catch (e) { log(`Ayrıştırma hatası: ${e.message}`, "err"); alert(e.message); }
+        log(`✅ ${tasks.length} alt görev ve DAG başarıyla oluşturuldu.`, "success");
+        await loadPlanTasks();
+        $("taskListContainer").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch (e) {
+        log(`Ayrıştırma hatası: ${e.message}`, "err");
+        alert(e.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "🧩 Yerel Ollama ile Ayrıştır (Decompose)";
+      }
     }
 
     async function resetPlan() {
@@ -576,9 +667,9 @@
       toggleModal("settingsModal", false); refreshAll();
     }
 
-    async function refreshAll() { await fetchSystemInfo(); await loadAgents(); await loadPlanTasks(); }
+    async function refreshAll() { await fetchSystemInfo(); await loadOllamaModels(); await loadAgents(); await loadPlanTasks(); await loadDirectTasks(); await loadServerLogs(); }
     refreshAll();
-    setInterval(() => { loadAgents(); loadPlanTasks(); }, 4000);
+    setInterval(() => { loadAgents(); loadPlanTasks(); loadDirectTasks(); loadServerLogs(); }, 4000);
   </script>
 </body>
 </html>

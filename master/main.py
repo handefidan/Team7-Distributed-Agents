@@ -12,7 +12,9 @@ import logging
 import os
 import re
 import time
+from collections import deque
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -111,20 +113,77 @@ def create_app(
     # Seeded from agents_file; later registrations live in memory only.
     agents: dict[str, AgentRegistration] = load_agents(agents_file) if agents_file else {}
     dispatches: dict[UUID, DispatchRecord] = {}
-    dep_manager = DependencyManager() 
+    dep_manager = DependencyManager()
+    activity_logs: deque[dict] = deque(maxlen=100)
+    _QUIET_GET_PATHS = {
+        "/",
+        "/dashboard",
+        "/api/v1/system/logs",
+        "/api/v1/system/info",
+        "/api/v1/agents/health",
+        "/api/v1/plan/tasks",
+        "/api/v1/plan/info",
+        "/api/v1/tasks",
+    }
+
+    @app.middleware("http")
+    async def track_api_activity(request: Request, call_next):
+        started = time.perf_counter()
+        response = await call_next(request)
+        if request.url.path != "/api/v1/system/logs" and not (
+            request.method == "GET" and request.url.path in _QUIET_GET_PATHS
+        ):
+            client_ip = request.client.host if request.client else "unknown"
+            activity_logs.append({
+                "time": datetime.now().strftime("%H:%M:%S"),
+                "client_ip": client_ip,
+                "method": request.method,
+                "path": request.url.path,
+                "status": response.status_code,
+                "ms": round((time.perf_counter() - started) * 1000, 1),
+            })
+        return response 
     ollama_client = httpx.AsyncClient(
         base_url=OLLAMA_BASE_URL, transport=ollama_transport, timeout=OLLAMA_TIMEOUT_SECONDS
     )
 
     class RequirementPayload(BaseModel):
         requirement_text: str = Field(min_length=1)
+        model: str | None = None
+
+    async def list_ollama_models() -> list[str]:
+        try:
+            resp = await ollama_client.get("/api/tags", timeout=3.0)
+            resp.raise_for_status()
+            return [m["name"] for m in resp.json().get("models", []) if m.get("name")]
+        except Exception:
+            return []
+
+    async def resolve_ollama_model(requested: str | None = None) -> str:
+        if requested and requested.strip():
+            return requested.strip()
+        installed = await list_ollama_models()
+        if not installed or OLLAMA_MODEL in installed:
+            return OLLAMA_MODEL
+        return next((m for m in installed if m.startswith(OLLAMA_MODEL)), installed[0])
+
+    @app.get("/api/v1/ollama/models")
+    async def ollama_models():
+        installed = await list_ollama_models()
+        default_model = (
+            OLLAMA_MODEL
+            if (not installed or OLLAMA_MODEL in installed)
+            else next((m for m in installed if m.startswith(OLLAMA_MODEL)), installed[0])
+        )
+        return {"available": bool(installed), "models": installed, "default_model": default_model}
 
     @app.post("/api/v1/requirements/decompose", response_model=DecomposeResponse)
     async def decompose(payload: RequirementPayload) -> DecomposeResponse:
         text = payload.requirement_text.strip()
         if not text:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "requirement_text cannot be empty")
-        return await decompose_requirement(text, ollama_client, OLLAMA_MODEL)
+        model = await resolve_ollama_model(payload.model)
+        return await decompose_requirement(text, ollama_client, model)
 
     @app.post("/api/v1/requirements/decompose_and_map", response_model=list[MappedTask])
     async def decompose_and_map(payload: RequirementPayload) -> list[MappedTask]:
@@ -132,8 +191,10 @@ def create_app(
         text = payload.requirement_text.strip()
         if not text:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "requirement_text cannot be empty")
-        decomp = await decompose_requirement(text, ollama_client, OLLAMA_MODEL)
+        model = await resolve_ollama_model(payload.model)
+        decomp = await decompose_requirement(text, ollama_client, model)
         try:
+            dep_manager.reset()
             return dep_manager.register_decomposition(decomp)
         except CyclicDependencyError as exc:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
@@ -372,6 +433,16 @@ def create_app(
             "ready_tasks_count": len(dep_manager.get_ready_tasks()),
         }
 
+    @app.get("/api/v1/system/logs")
+    def get_system_logs() -> list[dict]:
+        """Recent incoming API requests from all clients/peers on the network."""
+        return list(activity_logs)
+
+    @app.delete("/api/v1/system/logs", status_code=status.HTTP_200_OK)
+    def clear_system_logs() -> dict[str, str]:
+        activity_logs.clear()
+        return {"status": "ok"}
+
     @app.get("/api/v1/plan/info")
     def plan_info():
         return {
@@ -508,7 +579,9 @@ def create_app(
             'if [ -z "$MODEL" ]; then MODEL="auto"; fi\n'
             'echo "[Team7] Connecting $AGENT_ID (model: $MODEL) -> $MASTER_URL via Tailscale..."\n'
             'export MASTER_URL AGENT_ID AGENT_PORT="$PORT" AGENT_MODEL="$MODEL"\n'
-            'exec python3 -m agent.main\n'
+            'PY="./.venv/bin/python3"\n'
+            '[ -x "$PY" ] || PY="python3"\n'
+            'exec "$PY" -m agent.main\n'
         )
 
     @app.delete("/api/v1/agents/{agent_id}", status_code=status.HTTP_200_OK)
