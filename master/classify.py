@@ -12,7 +12,7 @@ the second one is required at 0.
 from shared.schemas import CapabilityScores, TaskType
 
 MAIN_THRESHOLD = 80
-SECOND_THRESHOLD = 60
+SECOND_THRESHOLD = 70
 
 # task type -> (main capability, second capability)
 TYPE_CAPABILITIES: dict[TaskType, tuple[str, str]] = {

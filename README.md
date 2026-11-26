@@ -92,10 +92,15 @@ AGENT_ID=agent-a AGENT_MODEL=llama3.2:3b AGENT_SUPPORTED_TYPES=backend,testing \
 ```
 *Worker Configuration Variables:*
 - `AGENT_ID`: Unique node identifier (alphanumeric, dashes, underscores).
-- `AGENT_MODEL`: Model name registered in Ollama.
-- `AGENT_SUPPORTED_TYPES`: Comma-separated list (`frontend,backend,database,testing,documentation`).
+- `AGENT_MODEL`: Model name registered in Ollama (set to `auto` to auto-detect local Ollama model).
+- `AGENT_SUPPORTED_TYPES`: Comma-separated list (`requirements,frontend,backend,database,testing,integration,documentation,review`).
 - `AGENT_MAX_QUEUE`: Maximum queue depth (default `5`, excess triggers HTTP 200 rejection).
 - `AGENT_PORT`: Port to listen on (default `8001`).
+- `MASTER_URL`: Optional Master URL (e.g. `[http://100.85.21.3:8000](http://100.85.21.3:8000)`) for automatic worker self-registration on startup.
+- `OLLAMA_BASE_URL`: Local Ollama server URL (default `http://localhost:11434`).
+- `OLLAMA_TIMEOUT_SECONDS`: Timeout for local Ollama inference calls (default `120` seconds).
+- `TAILSCALE_IP`: Explicit bind IP override if `tailscale ip -4` is unavailable.
+- `AGENT_MOCK`: Set to `true` to simulate model responses when Ollama is not running locally (default `false`).
 
 ### 2. Start the Master Agent (Port 8000)
 ```bash
@@ -107,6 +112,21 @@ python -m master.main
 - `AGENT_TIMEOUT_SECONDS`: Maximum latency tolerated for worker task ACK (default `5` seconds).
 - `AGENT_HEALTH_TIMEOUT_SECONDS`: Maximum wait for an agent's health check during selection (default `2` seconds).
 - `MASTER_AGENTS_FILE`: Agent list registered at startup (default `backend/agents.json`).
+- `MASTER_OLLAMA_BASE_URL`: Ollama endpoint used by Master for requirement decomposition (default `http://localhost:11434`).
+- `MASTER_OLLAMA_MODEL`: Model used by Master for decomposition (default `llama3.2`).
+- `MASTER_OLLAMA_TIMEOUT_SECONDS`: Timeout for Master decomposition calls (default `120` seconds).
+- `TAILSCALE_IP`: Explicit Tailscale IPv4 bind address override.
+- `CORS_ORIGINS`: Comma-separated allowed origins for the dashboard UI (default `*`).
+
+### Team Tailscale Network & Nodes
+
+| Team Member | Hostname | OS | Tailscale IPv4 | Default Endpoint |
+| :--- | :--- | :--- | :--- | :--- |
+| **Hande Fidan** | `desktop-an9k85f` | Windows | `100.85.21.3` | `[http://100.85.21.3:8000](http://100.85.21.3:8000)` (Master / Worker) |
+| **Eyad Zaidan** | `desktop-k9ng56c` | Windows | `100.126.217.63` | `[http://100.126.217.63:8001](http://100.126.217.63:8001)` |
+| **Berat Ermi?** | `desktop-pv3c28o` | Windows | `100.103.232.30` | `[http://100.103.232.30:8001](http://100.103.232.30:8001)` |
+| **Berat Ermi? (Linux)** | `miyavmoto` | Linux | `100.98.137.24` | `[http://100.98.137.24:8001](http://100.98.137.24:8001)` |
+| **Nehir Tun?** | `nehirtun` | Windows | `100.107.247.59` | `[http://100.107.247.59:8001](http://100.107.247.59:8001)` |
 
 On startup the master registers every agent in the agents file. For the master to send work to one of them, its entry needs a `base_url` (`"base_url": "http://<agent-tailscale-ip>:8001"`) and that agent must be started with a matching `AGENT_ID`. Entries without a `base_url` are listed but always treated as offline. Dots in an `agent_id` become dashes, so `llama-3.2-reviewer` must be started with `AGENT_ID=llama-3-2-reviewer`.
 
@@ -163,16 +183,18 @@ curl http://localhost:8001/agent/v1/tasks/<task_id>/result
 
 ## Automated Test Suite
 
-All 59 automated unit and integration tests run entirely in-memory using `httpx.ASGITransport` and `httpx.MockTransport` without requiring external network connectivity or a running Ollama daemon:
+All 95 automated unit and integration tests run entirely in-memory using `httpx.ASGITransport` and `httpx.MockTransport` without requiring external network connectivity or a running Ollama daemon:
 
 ```bash
-python -m pytest -q
+python -m pytest -v
 ```
 
 **Test Coverage:**
-- `tests/test_classify.py` (16 tests): Fixed capability threshold mapping per task type, type-to-score validation, model override guards.
+- `tests/test_classify.py` (17 tests): Fixed capability threshold mapping per task type (including `review`), type-to-score validation, model override guards.
+- `tests/test_dashboard_endpoints.py` (7 tests): System info, dashboard UI serving, plan reset, live agent health monitoring, one-click Tailscale auto-connect, and worker auto-registration.
 - `tests/test_decompose.py` (5 tests): Requirement parsing, fallback handling on model error, empty payload rejection.
 - `tests/test_dependency.py` (14 tests): Label-to-UUID mapping, lifecycle (`PENDING`/`BLOCKED`/`DISPATCHED`/`COMPLETED`/`FAILED`), cycle detection, ready-task ordering, dependency outputs in `context`, API-level dependency flow.
 - `tests/test_dispatch.py` (13 tests): SLA acknowledgement (<= 200 ms), idempotency, queue overflow, network timeouts (504), unreachable hosts (503), health status.
-- `tests/test_orchestrator.py` (20 tests): whole-plan runs against real agent apps, dependency order, outputs passed on, every recovery rule (retry on another agent, busy waiting, timeout, give up), resending a failed task.
+- `tests/test_orchestrator.py` (20 tests): Whole-plan runs against real agent apps, dependency order, outputs passed on, every recovery rule (retry on another agent, busy waiting, timeout, give up), resending a failed task.
+- `tests/test_review.py` (8 tests): Review Agent capabilities, JSON decision validation (`approved`/`rejected`), empty/malformed review failure handling, end-to-end review rejection recovery, and health-monitoring offline failover.
 - `tests/test_selection.py` (11 tests): Capability-based routing algorithm, threshold filtering, score tie-breaking, skipping busy and offline agents, 404/503 handling, loading `agents.json` at startup.

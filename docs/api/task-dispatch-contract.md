@@ -46,7 +46,7 @@ Request body — `TaskMessage`:
 |---|---|---|---|
 | `task_id` | UUID | yes | Unique id; also the idempotency key |
 | `agent_id` | string | yes | Id of the agent the task is addressed to |
-| `type` | enum | yes | `requirements`, `frontend`, `backend`, `database`, `testing`, `integration`, `documentation` |
+| `type` | enum | yes | `requirements`, `frontend`, `backend`, `database`, `testing`, `integration`, `documentation`, `review` |
 | `title` | string (1–200) | yes | |
 | `description` | string | yes | |
 | `priority` | enum | no | `low`, `medium` (default), `high` |
@@ -288,7 +288,11 @@ List of `MappedTask`. New fields since Sprint 3:
 | `output` | string \| null | Result text of a completed task |
 | `attempts` | Attempt[] | One entry per try: `agent_id`, `outcome`, `detail` |
 
-`Attempt.outcome` is one of `completed`, `rejected`, `unreachable`, `agent_failed`, `timeout`, `no_agent`, `busy`.
+`Attempt.outcome` is one of `completed`, `rejected`, `unreachable`, `agent_failed`, `timeout`, `no_agent`, `busy`, `review_rejected`.
+
+### Review & Error Recovery Flow (Sprint 4 Week 8)
+
+When a dedicated Review Agent (`supported_types: ["review"]`, default capabilities `coding: 75, reasoning: 90, context: 80`) is registered, completed worker outputs are sent as `type: "review"` with `context.artifact` before finalizing the task. The Review Agent returns `ReviewOutput` JSON (`{"decision": "approved" | "rejected", "reason": "..."}`). Empty or malformed review responses fail validation on the agent (`status: "failed"`), and both rejected and failed reviews trigger Master error recovery (`outcome: "review_rejected"`), reassigning the original task to the next qualifying idle agent.
 
 ### Agent: resending a task
 

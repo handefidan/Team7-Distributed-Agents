@@ -26,17 +26,21 @@ from pydantic import BaseModel, Field, ValidationError
 
 from master.decompose import DecomposeResponse, decompose_requirement
 from master.dependency import CyclicDependencyError, DependencyManager, MappedTask
-from master.orchestrator import DispatchResult, RunReport, RunSettings, run_plan
 from master.selection import AgentStatus, fetch_statuses, qualifying_agents
 from shared.network import get_tailscale_peers
+from master.classify import required_capabilities
+from master.orchestrator import DispatchResult, RunReport, RunSettings, _wait_for_result, run_plan
 from shared.schemas import (
     AckStatus,
     AgentRegistration,
     DispatchRecord,
     DispatchStatus,
+    ReviewDecision,
+    ReviewOutput,
     TaskAcknowledgement,
     TaskMessage,
     TaskSpec,
+    TaskType,
     infer_capabilities,
 )
 
@@ -361,9 +365,70 @@ def create_app(
         except (httpx.HTTPError, ValueError):
             return None
 
+    async def review_output(spec: TaskSpec, output: str) -> tuple[str, str | None]:
+        """Send a completed task output to an available Review Agent when one is registered."""
+        if spec.type == TaskType.REVIEW:
+            return "approved", None
+
+        review_req = required_capabilities(TaskType.REVIEW)
+        review_spec = TaskSpec(
+            type=TaskType.REVIEW,
+            title=f"Review: {spec.title}",
+            description=spec.description,
+            context={"artifact": output, "reviewed_task_id": str(spec.task_id)},
+            required_capabilities=review_req,
+        )
+
+        # Only trigger review when a dedicated review-capable agent is registered and healthy
+        review_candidates = qualifying_agents(list(agents.values()), review_spec)
+        if not review_candidates:
+            return "approved", None
+
+        statuses = await fetch_statuses(app.state.http, review_candidates, AGENT_HEALTH_TIMEOUT_SECONDS)
+        chosen: AgentRegistration | None = None
+        for cand in review_candidates:
+            if statuses.get(cand.agent_id) != AgentStatus.IDLE:
+                continue
+            try:
+                h_resp = await app.state.http.get(
+                    f"{str(cand.base_url).rstrip('/')}/agent/v1/health",
+                    timeout=AGENT_HEALTH_TIMEOUT_SECONDS,
+                )
+                if h_resp.status_code == 200:
+                    stypes = h_resp.json().get("supported_types", [])
+                    if stypes == [TaskType.REVIEW.value]:
+                        chosen = cand
+                        break
+            except Exception:
+                continue
+
+        if chosen is None:
+            return "approved", None
+
+        try:
+            rec = await dispatch_to_agent(chosen, review_spec)
+        except HTTPException:
+            return "approved", None
+
+        if rec.status != DispatchStatus.ACKNOWLEDGED:
+            return "approved", None
+
+        outcome, raw_review = await _wait_for_result(chosen, rec.task.task_id, fetch_result, settings)
+        if outcome != "completed" or not raw_review:
+            return "rejected", f"review failed ({outcome}): {raw_review or 'empty review response'}"
+
+        try:
+            parsed = ReviewOutput.model_validate_json(raw_review)
+        except ValidationError as exc:
+            return "rejected", f"malformed review output: {exc}"
+
+        if parsed.decision == ReviewDecision.REJECTED:
+            return "rejected", parsed.reason
+        return "approved", parsed.reason
+
     async def run_and_store() -> RunReport:
         try:
-            report = await run_plan(dep_manager, send, fetch_result, settings)
+            report = await run_plan(dep_manager, send, fetch_result, settings, review_output=review_output)
         finally:
             run_state["task"] = None
         run_state["report"] = report

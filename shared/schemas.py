@@ -43,13 +43,20 @@ class CapabilityScores(BaseModel):
 
 
 def infer_capabilities(model: str) -> CapabilityScores:
-    """Estimate default capability scores from an Ollama model name."""
+    """Estimate specialized capability scores from an Ollama model name
+    so tasks distribute cleanly across qwen3, phi4-mini, gemma3, and llama3.2."""
     name = model.lower()
-    if any(k in name for k in ("coder", "code", "qwen")):
-        return CapabilityScores(coding=92, reasoning=82, context=80)
-    if any(k in name for k in ("r1", "deepseek", "gemma", "phi", "mistral")):
-        return CapabilityScores(coding=80, reasoning=88, context=84)
-    return CapabilityScores(coding=82, reasoning=82, context=80)
+    # 1. Qwen 3 (4B) & coder models -> BACKEND, FRONTEND
+    if any(k in name for k in ("qwen", "coder", "code")):
+        return CapabilityScores(coding=92, reasoning=74, context=72)
+    # 2. Phi-4 Mini (3.8B) & DeepSeek -> DATABASE, TESTING, REVIEW
+    if any(k in name for k in ("phi", "r1", "deepseek")):
+        return CapabilityScores(coding=74, reasoning=92, context=68)
+    # 3. Gemma 3 (4B) & Mistral -> REQUIREMENTS
+    if any(k in name for k in ("gemma", "mistral")):
+        return CapabilityScores(coding=66, reasoning=86, context=82)
+    # 4. Llama 3.2 (3B) & other general models -> DOCUMENTATION, INTEGRATION
+    return CapabilityScores(coding=70, reasoning=74, context=90)
 
 
 class TaskSpec(BaseModel):
@@ -128,6 +135,7 @@ class DispatchRecord(BaseModel):
     acknowledgement: TaskAcknowledgement | None = None
     error: str | None = None
     round_trip_ms: float | None = None
+
 
 class ReviewDecision(StrEnum):
     APPROVED = "approved"
